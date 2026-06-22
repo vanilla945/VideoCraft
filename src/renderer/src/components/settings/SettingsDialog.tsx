@@ -56,6 +56,8 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps): JSX.Elem
   const [keyStatus, setKeyStatus] = useState<Record<string, 'configured' | 'missing'>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [cacheSize, setCacheSize] = useState<string>('')
+  const [clearing, setClearing] = useState(false)
 
   useEffect(() => {
     if (open) {
@@ -66,16 +68,31 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps): JSX.Elem
   const loadConfig = async (): Promise<void> => {
     try {
       setLoading(true)
-      const [cfg, keys] = await Promise.all([
+      const [cfg, keys, size] = await Promise.all([
         window.api.settings.getConfig(),
         window.api.settings.getKeyStatus(),
+        window.api.app.getCacheSize().catch(() => ({ formatted: '未知' })),
       ])
       setConfig(cfg as ModelConfig)
       setKeyStatus(keys as Record<string, 'configured' | 'missing'>)
+      setCacheSize(size.formatted)
     } catch (err) {
       console.error('加载配置失败:', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleClearCache = async (): Promise<void> => {
+    setClearing(true)
+    try {
+      const result = await window.api.app.clearCache()
+      setCacheSize('0 B')
+      alert(`已清空缓存文件 (${result.formatted})`)
+    } catch (err) {
+      console.error('清空缓存失败:', err)
+    } finally {
+      setClearing(false)
     }
   }
 
@@ -267,6 +284,29 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps): JSX.Elem
               max={50}
               className="w-24 ml-2 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
             />
+          </div>
+        </div>
+
+        {/* Cache Management */}
+        <div className="pt-2 border-t border-gray-700">
+          <label className="block text-sm text-gray-400 mb-2">缓存管理</label>
+          <div className="flex items-center justify-between bg-gray-700/30 rounded-lg px-3 py-2">
+            <div>
+              <p className="text-sm text-gray-300">
+                缓存大小: <span className="text-white">{cacheSize || '计算中...'}</span>
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                包含缩略图、转录文件、临时导出、生成图片等
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleClearCache}
+              disabled={clearing}
+            >
+              {clearing ? '清空中...' : '🗑 清空缓存'}
+            </Button>
           </div>
         </div>
 

@@ -40,7 +40,11 @@ const api = {
   },
   app: {
     getPath: (name: string): Promise<string> =>
-      ipcRenderer.invoke('app:get-path', { name })
+      ipcRenderer.invoke('app:get-path', { name }),
+    clearCache: (): Promise<{ cleared: number; formatted: string }> =>
+      ipcRenderer.invoke('app:clear-cache'),
+    getCacheSize: (): Promise<{ size: number; formatted: string }> =>
+      ipcRenderer.invoke('app:get-cache-size'),
   },
   settings: {
     getConfig: (): Promise<unknown> =>

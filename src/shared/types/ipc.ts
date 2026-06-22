@@ -29,5 +29,8 @@ export const IPC_CHANNELS = {
   AI_EDIT_RUN: 'ai:edit-run',
   AI_EDIT_PREVIEW: 'ai:edit-preview',
   AI_CHAT_SEND: 'ai:chat-send',
-  AI_CHAT_PARSE: 'ai:chat-parse'
+  AI_CHAT_PARSE: 'ai:chat-parse',
+
+  APP_CLEAR_CACHE: 'app:clear-cache',
+  APP_GET_CACHE_SIZE: 'app:get-cache-size'
 } as const

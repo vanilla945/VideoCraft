@@ -27,6 +27,8 @@ declare global {
       }
       app: {
         getPath: (name: string) => Promise<string>
+        clearCache: () => Promise<{ cleared: number; formatted: string }>
+        getCacheSize: () => Promise<{ size: number; formatted: string }>
       }
       settings: {
         getConfig: () => Promise<{
