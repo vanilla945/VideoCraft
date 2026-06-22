@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { Button } from '../ui/Button'
 import { useProjectStore } from '../../stores/useProjectStore'
 import { useMediaStore } from '../../stores/useMediaStore'
 import { useEditorStore } from '../../stores/useEditorStore'
