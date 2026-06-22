@@ -33,8 +33,7 @@ class WhisperService {
   constructor() {
     this.outputDir = path.join(app.getPath('userData'), 'transcription')
     this.ensureDir(this.outputDir)
-    // Start loading the model in background
-    this.loadModel()
+    // Lazy load on first use to avoid startup crash
   }
 
   private ensureDir(dir: string): void {
@@ -53,12 +52,9 @@ class WhisperService {
     try {
       // Dynamic import to avoid blocking startup if not installed
       const { pipeline } = await import('@xenova/transformers')
-      console.log(`[Whisper] 正在加载模型 ${this.modelName}...`)
       this.model = await pipeline('automatic-speech-recognition', this.modelName)
       this.ready = true
-      console.log('[Whisper] 模型加载完成')
     } catch (err) {
-      console.warn('[Whisper] 模型加载失败，将使用 mock 模式:', (err as Error).message)
       this.ready = false
     }
   }

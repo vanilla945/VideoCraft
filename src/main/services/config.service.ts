@@ -45,33 +45,27 @@ class ConfigService {
   }
 
   private validate(): void {
-    const issues: string[] = []
+    // Auto-fallback: if selected provider has no key, switch to one that does
+    const hasDeepSeek = !!process.env.DEEPSEEK_API_KEY
+    const hasMinimax = !!process.env.MINIMAX_API_KEY
+    const hasKimi = !!process.env.KIMI_API_KEY
 
-    if (!process.env.DEEPSEEK_API_KEY && !process.env.MINIMAX_API_KEY && !process.env.KIMI_API_KEY) {
-      issues.push('未配置任何 LLM API Key (DEEPSEEK_API_KEY / MINIMAX_API_KEY / KIMI_API_KEY)。请在 .env 文件中至少配置一个。')
-    }
-
-    if (this.config.fastModelProvider === 'deepseek' && !process.env.DEEPSEEK_API_KEY) {
-      issues.push('简单快速模型设置为 DeepSeek，但未配置 DEEPSEEK_API_KEY')
-    }
-    if (this.config.heavyModelProvider === 'deepseek' && !process.env.DEEPSEEK_API_KEY) {
-      issues.push('深度理解模型设置为 DeepSeek，但未配置 DEEPSEEK_API_KEY')
-    }
-    if (this.config.ttsProvider === 'minimax' && !process.env.MINIMAX_API_KEY) {
-      issues.push('TTS 模型设置为 Minimax，但未配置 MINIMAX_API_KEY')
-    }
-    if (this.config.imageProvider === 'minimax' && !process.env.MINIMAX_API_KEY) {
-      issues.push('图像生成模型设置为 Minimax，但未配置 MINIMAX_API_KEY')
+    if (!hasDeepSeek && !hasMinimax && !hasKimi) {
+      process.stderr.write('[VideoCraft Config] ⚠️  未配置任何 LLM API Key。请在 .env 文件中至少配置一个。\n')
+      return
     }
 
-    for (const issue of issues) {
-      console.warn(`[VideoCraft Config] ⚠️  ${issue}`)
+    // Auto-switch fast/heavy model providers if selected one has no key
+    if (this.config.fastModelProvider === 'deepseek' && !hasDeepSeek) {
+      if (hasMinimax) { this.config.fastModelProvider = 'minimax'; this.config.fastModelName = 'minimax-m3' }
+      else if (hasKimi) { this.config.fastModelProvider = 'kimi'; this.config.fastModelName = 'kimi-latest' }
+    }
+    if (this.config.heavyModelProvider === 'deepseek' && !hasDeepSeek) {
+      if (hasMinimax) { this.config.heavyModelProvider = 'minimax'; this.config.heavyModelName = 'minimax-m3' }
+      else if (hasKimi) { this.config.heavyModelProvider = 'kimi'; this.config.heavyModelName = 'kimi-latest' }
     }
 
-    const configured = [process.env.DEEPSEEK_API_KEY, process.env.MINIMAX_API_KEY, process.env.KIMI_API_KEY].filter(Boolean)
-    if (configured.length > 0) {
-      console.log(`[VideoCraft Config] ✅ 已加载 ${configured.length} 个 API Key，配置就绪`)
-    }
+    process.stderr.write(`[VideoCraft Config] ✅ API Keys: DeepSeek ${hasDeepSeek ? '✓' : '✗'}, Minimax ${hasMinimax ? '✓' : '✗'}, Kimi ${hasKimi ? '✓' : '✗'} → Fast=${this.config.fastModelProvider}/${this.config.fastModelName} Heavy=${this.config.heavyModelProvider}/${this.config.heavyModelName}\n`)
   }
 
   reload(): void {

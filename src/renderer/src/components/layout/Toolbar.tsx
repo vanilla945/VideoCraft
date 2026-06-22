@@ -23,7 +23,6 @@ export function Toolbar({ onToggleAI, onToggleChat, onAIEdit, showChat, isEditin
   const { project, createProject, saveProject, saveProjectAs, loadProject } = useProjectStore()
   const { importMedia } = useMediaStore()
   const { openDialog: openExport } = useExportStore()
-
   const { assets } = useMediaStore()
   const { startTranscription, isTranscribing } = useSubtitleStore()
 
@@ -43,9 +42,22 @@ export function Toolbar({ onToggleAI, onToggleChat, onAIEdit, showChat, isEditin
   const handleTranscribe = useCallback(async () => {
     const videoAssets = assets.filter(a => a.mediaType === 'video')
     if (videoAssets.length === 0) return
-    // Transcribe the first video asset
     await startTranscription(videoAssets[0].filePath, 'zh')
   }, [assets, startTranscription])
+
+  // Smart AI Edit: auto-transcribe if no subtitles exist yet
+  const handleAIEditWithTranscribe = useCallback(async () => {
+    if (!hasSubtitles && !isTranscribing) {
+      const videoAssets = assets.filter(a => a.mediaType === 'video')
+      if (videoAssets.length > 0) {
+        await startTranscription(videoAssets[0].filePath, 'zh')
+        return
+      }
+    }
+    onAIEdit?.()
+  }, [hasSubtitles, isTranscribing, assets, startTranscription, onAIEdit])
+
+  const hasVideo = assets.filter(a => a.mediaType === 'video').length > 0
 
   return (
     <div className="flex items-center gap-2 px-4 py-2 bg-gray-850 border-b border-gray-700">
@@ -77,17 +89,21 @@ export function Toolbar({ onToggleAI, onToggleChat, onAIEdit, showChat, isEditin
               variant="secondary"
               size="sm"
               onClick={handleTranscribe}
-              disabled={isTranscribing || assets.filter(a => a.mediaType === 'video').length === 0}
+              disabled={isTranscribing || !hasVideo}
             >
               {isTranscribing ? '转录中...' : '🎙 转录'}
             </Button>
             <Button
               variant="primary"
               size="sm"
-              onClick={onAIEdit}
-              disabled={isEditing || !hasSubtitles}
+              onClick={handleAIEditWithTranscribe}
+              disabled={isEditing || isTranscribing || !hasVideo}
+              title={!hasSubtitles ? '将自动转录后开始 AI 剪辑' : 'AI 自动分析并生成剪辑方案'}
             >
-              {isEditing ? 'AI 分析中...' : '🤖 AI 剪辑'}
+              {isEditing ? 'AI 分析中...'
+                : isTranscribing ? '转录中...'
+                : !hasSubtitles ? '🎙 转录+AI 剪辑'
+                : '🤖 AI 剪辑'}
             </Button>
             <Button variant="primary" size="sm" onClick={openExport}>
               导出视频

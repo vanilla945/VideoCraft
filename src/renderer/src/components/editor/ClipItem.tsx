@@ -1,17 +1,16 @@
 import type { Clip, MediaAsset } from '@shared/types'
 
-const PIXELS_PER_SECOND = 80
-
 interface ClipItemProps {
   clip: Clip
   asset?: MediaAsset
   isSelected: boolean
   onSelect: () => void
+  pxPerSec?: number
 }
 
-export function ClipItem({ clip, asset, isSelected, onSelect }: ClipItemProps): JSX.Element {
-  const left = clip.timelineStart * PIXELS_PER_SECOND
-  const width = Math.max(clip.duration * PIXELS_PER_SECOND, 40)
+export function ClipItem({ clip, asset, isSelected, onSelect, pxPerSec = 80 }: ClipItemProps): JSX.Element {
+  const left = clip.timelineStart * pxPerSec
+  const width = Math.max(clip.duration * pxPerSec, 40)
   const formatTime = (sec: number): string => {
     const m = Math.floor(sec / 60)
     const s = Math.floor(sec % 60)

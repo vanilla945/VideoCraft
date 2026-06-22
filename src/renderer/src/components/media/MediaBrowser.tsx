@@ -5,17 +5,20 @@ export function MediaBrowser(): JSX.Element {
   const { assets, importing } = useMediaStore()
   const { timeline, addClipToTrack } = useEditorStore()
 
+  // Count how many times each asset is used on the timeline
+  const getUsageCount = (assetId: string): number => {
+    let count = 0
+    for (const track of timeline.tracks) {
+      for (const clip of track.clips) {
+        if (clip.assetId === assetId) count++
+      }
+    }
+    return count
+  }
+
   const handleAddToTimeline = (assetId: string, duration: number): void => {
-    // Use first video track, or create one
     const videoTrack = timeline.tracks.find((t) => t.type === 'video')
     const trackId = videoTrack?.id || 'default-video-track'
-
-    // Ensure default track exists
-    if (!videoTrack) {
-      // We need to add a track through the editor store
-      // For now, add to the first available track
-    }
-
     addClipToTrack(assetId, trackId, duration)
   }
 
@@ -36,6 +39,7 @@ export function MediaBrowser(): JSX.Element {
           <MediaCard
             key={asset.id}
             asset={asset}
+            usageCount={getUsageCount(asset.id)}
             onAddToTimeline={() => handleAddToTimeline(asset.id, asset.metadata.duration)}
           />
         ))}
@@ -46,9 +50,11 @@ export function MediaBrowser(): JSX.Element {
 
 function MediaCard({
   asset,
+  usageCount,
   onAddToTimeline
 }: {
   asset: import('@shared/types').MediaAsset
+  usageCount: number
   onAddToTimeline: () => void
 }): JSX.Element {
   const formatDuration = (sec: number): string => {
@@ -59,13 +65,19 @@ function MediaCard({
 
   return (
     <div
-      className="bg-gray-800 rounded-lg overflow-hidden border border-gray-700 hover:border-gray-500 transition-colors group cursor-grab active:cursor-grabbing"
+      className="bg-gray-800 rounded-lg overflow-hidden border border-gray-700 hover:border-gray-500 transition-colors group cursor-grab active:cursor-grabbing relative"
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData('assetId', asset.id)
         e.dataTransfer.effectAllowed = 'move'
       }}
     >
+      {/* Usage count badge */}
+      {usageCount > 0 && (
+        <div className="absolute top-2 right-2 z-10 bg-blue-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-lg">
+          {usageCount}
+        </div>
+      )}
       <div className="aspect-video bg-gray-750 flex items-center justify-center overflow-hidden">
         {asset.thumbnailPath ? (
           <img
