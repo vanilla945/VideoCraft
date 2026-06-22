@@ -78,13 +78,15 @@ export function AppShell(): JSX.Element {
   }, [subtitles, store])
 
   const handleApplyEdits = useCallback(() => {
-    if (edlData?.decisions) {
-      applyAIEdits(edlData.decisions)
+    // Use unified result if available (has time-based decisions)
+    const decisions = unifiedResult?.editDecisions || edlData?.decisions
+    if (decisions && decisions.length > 0) {
+      applyAIEdits(decisions)
       setEdlData(null)
       setReviewData(null)
       setUnifiedResult(null)
     }
-  }, [edlData, applyAIEdits])
+  }, [edlData, unifiedResult, applyAIEdits])
 
   const dismiss = () => { setEdlData(null); setReviewData(null); setUnifiedResult(null) }
 

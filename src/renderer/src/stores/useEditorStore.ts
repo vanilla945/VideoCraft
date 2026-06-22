@@ -1,9 +1,9 @@
 import { create } from 'zustand'
-import type { Timeline, Clip, Track } from '@shared/types'
+import type { Timeline, Clip } from '@shared/types'
 
 interface AIEditRecord {
   removedClipIds: string[]
-  modifiedClips: Map<string, Partial<Clip>>      // clipId -> original values
+  modifiedClips: Map<string, Partial<Clip>>
   addedClipIds: string[]
   timestamp: number
 }
@@ -26,8 +26,12 @@ interface EditorState {
   setPlaying: (playing: boolean) => void
   updateTimelineDuration: () => void
 
-  // AI edit actions
-  applyAIEdits: (decisions: Array<{ clipId: string; action: string; speedRatio?: number }>) => void
+  // AI edit — rebuilds timeline from EDL decisions (time-based, not clipId-based)
+  applyAIEdits: (decisions: Array<{
+    clipId?: string; startTime: number; endTime: number
+    action: string; reason?: string; confidence?: number
+    speedRatio?: number
+  }>) => void
   revertAIEdits: () => void
 }
 
@@ -144,53 +148,67 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ timeline: { ...timeline, duration: maxEnd } })
   },
 
+  // ==========================================
+  // AI Edit: rebuild timeline from EDL decisions
+  // Works on time ranges — no clipId dependency
+  // ==========================================
   applyAIEdits: (decisions) => {
-    set((state) => {
-      const record: AIEditRecord = {
-        removedClipIds: [],
-        modifiedClips: new Map(),
-        addedClipIds: [],
-        timestamp: Date.now(),
+    get().ensureDefaultTrack()
+    const state = get()
+    const firstTrack = state.timeline.tracks[0]
+    if (!firstTrack) return
+
+    const firstClip = firstTrack.clips[0]
+    if (!firstClip) return
+
+    const assetId = firstClip.assetId
+
+    // Save full timeline state for revert
+    const record: AIEditRecord = {
+      removedClipIds: firstTrack.clips.map(c => c.id),
+      modifiedClips: new Map(),
+      addedClipIds: [],
+      timestamp: Date.now(),
+    }
+
+    // Filter keep decisions, sort by startTime
+    const keepDecisions = decisions
+      .filter(d => d.action === 'keep' || d.action === 'speed' || d.action === 'trim')
+      .sort((a, b) => a.startTime - b.startTime)
+
+    if (keepDecisions.length === 0) return
+
+    const newClips: Clip[] = []
+    let timelinePos = 0
+
+    for (const d of keepDecisions) {
+      const duration = d.endTime - d.startTime
+      const speedRatio = d.speedRatio || 1
+      const actualDuration = duration / speedRatio
+
+      const newClip: Clip = {
+        id: crypto.randomUUID(),
+        assetId,
+        trackId: firstTrack.id,
+        sourceStart: d.startTime,
+        sourceEnd: d.endTime,
+        timelineStart: timelinePos,
+        duration: actualDuration,
+      }
+      newClips.push(newClip)
+      record.addedClipIds.push(newClip.id)
+
+      if (speedRatio !== 1) {
+        record.modifiedClips.set(newClip.id, { duration: actualDuration, sourceEnd: d.endTime })
       }
 
-      const newTracks = state.timeline.tracks.map((track) => {
-        const newClips = [...track.clips]
-        const removedSet = new Set<string>()
+      timelinePos += actualDuration
+    }
 
-        for (const d of decisions) {
-          const clip = newClips.find((c) => c.id === d.clipId)
-          if (!clip) continue
-
-          if (d.action === 'remove') {
-            removedSet.add(d.clipId)
-            record.removedClipIds.push(d.clipId)
-          } else if (d.action === 'speed' && d.speedRatio && d.speedRatio !== 1) {
-            // Store original before modifying
-            record.modifiedClips.set(d.clipId, {
-              duration: clip.duration,
-              sourceEnd: clip.sourceEnd,
-            })
-            // Adjust clip speed (shorter duration = faster playback)
-            const newDuration = clip.duration / d.speedRatio
-            clip.duration = newDuration
-            clip.sourceEnd = clip.sourceStart + newDuration
-          }
-          // trim, reorder, add_transition — preserve for later phases
-        }
-
-        return {
-          ...track,
-          clips: removedSet.size > 0
-            ? newClips.filter((c) => !removedSet.has(c.id))
-            : newClips,
-        }
-      })
-
-      return {
-        timeline: { ...state.timeline, tracks: newTracks },
-        aiEditApplied: true,
-        lastAIEditRecord: record,
-      }
+    set({
+      timeline: { ...state.timeline, tracks: [{ ...firstTrack, clips: newClips }] },
+      aiEditApplied: true,
+      lastAIEditRecord: record,
     })
     get().updateTimelineDuration()
   },
@@ -200,23 +218,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (!lastAIEditRecord) return
 
     set((state) => {
-      const newTracks = state.timeline.tracks.map((track) => {
-        const newClips = [...track.clips]
+      const firstTrack = state.timeline.tracks[0]
+      if (!firstTrack) return state
 
-        // Restore modified clips
-        for (const [clipId, original] of lastAIEditRecord.modifiedClips) {
-          const clip = newClips.find((c) => c.id === clipId)
-          if (clip) {
-            if (original.duration !== undefined) clip.duration = original.duration
-            if (original.sourceEnd !== undefined) clip.sourceEnd = original.sourceEnd
-          }
-        }
-
-        return { ...track, clips: newClips }
-      })
+      const keptClips = firstTrack.clips.filter(
+        c => !lastAIEditRecord.addedClipIds.includes(c.id)
+      )
 
       return {
-        timeline: { ...state.timeline, tracks: newTracks },
+        timeline: { ...state.timeline, tracks: [{ ...firstTrack, clips: keptClips }] },
         aiEditApplied: false,
         lastAIEditRecord: null,
       }

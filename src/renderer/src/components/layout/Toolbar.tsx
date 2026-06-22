@@ -26,7 +26,7 @@ export function Toolbar({ onToggleAI, onToggleChat, onAIEdit, showChat, isEditin
   const { openDialog: openExport } = useExportStore()
   const { assets } = useMediaStore()
   const { startTranscription, isTranscribing } = useSubtitleStore()
-  const { isPlaying, setPlaying, selectClip, timeline } = useEditorStore()
+  const { isPlaying, setPlaying, selectClip, timeline, addClipToTrack, ensureDefaultTrack } = useEditorStore()
 
   // Preview: toggle play/pause, select first clip if none selected
   const handlePreview = useCallback(() => {
@@ -52,24 +52,52 @@ export function Toolbar({ onToggleAI, onToggleChat, onAIEdit, showChat, isEditin
   const handleTranscribe = useCallback(async () => {
     const videoAssets = assets.filter(a => a.mediaType === 'video')
     if (videoAssets.length === 0) return
+
+    // Ensure a video track exists on the timeline
+    ensureDefaultTrack()
+    const tracks = useEditorStore.getState().timeline.tracks
+    const videoTrack = tracks.find(t => t.type === 'video') || tracks[0]
+
     // Transcribe ALL video assets sequentially
     for (const asset of videoAssets) {
       await startTranscription(asset.filePath, 'zh')
-    }
-  }, [assets, startTranscription])
 
-  const handleAIEditWithTranscribe = useCallback(async () => {
-    if (!hasSubtitles && !isTranscribing) {
-      const videoAssets = assets.filter(a => a.mediaType === 'video')
-      if (videoAssets.length > 0) {
-        for (const asset of videoAssets) {
-          await startTranscription(asset.filePath, 'zh')
-        }
-        return
+      // Auto-add clip to timeline so AI editing can operate on time ranges
+      const state = useEditorStore.getState()
+      const alreadyAdded = state.timeline.tracks
+        .flatMap(t => t.clips)
+        .some(c => c.assetId === asset.id)
+
+      if (!alreadyAdded && videoTrack) {
+        addClipToTrack(asset.id, videoTrack.id, asset.metadata.duration)
       }
     }
+  }, [assets, startTranscription, ensureDefaultTrack, addClipToTrack])
+
+  const handleAIEditWithTranscribe = useCallback(async () => {
+    // Ensure clips are on timeline before AI editing
+    ensureDefaultTrack()
+    const tracks = useEditorStore.getState().timeline.tracks
+    const videoTrack = tracks.find(t => t.type === 'video') || tracks[0]
+    const videoAssets = assets.filter(a => a.mediaType === 'video')
+
+    if (videoAssets.length > 0 && videoTrack) {
+      for (const asset of videoAssets) {
+        const alreadyAdded = tracks.flatMap(t => t.clips).some(c => c.assetId === asset.id)
+        if (!alreadyAdded) {
+          addClipToTrack(asset.id, videoTrack.id, asset.metadata.duration)
+        }
+      }
+    }
+
+    if (!hasSubtitles && !isTranscribing && videoAssets.length > 0) {
+      for (const asset of videoAssets) {
+        await startTranscription(asset.filePath, 'zh')
+      }
+      return
+    }
     onAIEdit?.()
-  }, [hasSubtitles, isTranscribing, assets, startTranscription, onAIEdit])
+  }, [hasSubtitles, isTranscribing, assets, startTranscription, onAIEdit, ensureDefaultTrack, addClipToTrack])
 
   const hasVideo = assets.filter(a => a.mediaType === 'video').length > 0
 

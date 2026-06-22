@@ -51,7 +51,6 @@ class ConfigService {
     const hasKimi = !!process.env.KIMI_API_KEY
 
     if (!hasDeepSeek && !hasMinimax && !hasKimi) {
-      process.stderr.write('[VideoCraft Config] ⚠️  未配置任何 LLM API Key。请在 .env 文件中至少配置一个。\n')
       return
     }
 
@@ -65,7 +64,7 @@ class ConfigService {
       else if (hasKimi) { this.config.heavyModelProvider = 'kimi'; this.config.heavyModelName = 'kimi-latest' }
     }
 
-    process.stderr.write(`[VideoCraft Config] ✅ API Keys: DeepSeek ${hasDeepSeek ? '✓' : '✗'}, Minimax ${hasMinimax ? '✓' : '✗'}, Kimi ${hasKimi ? '✓' : '✗'} → Fast=${this.config.fastModelProvider}/${this.config.fastModelName} Heavy=${this.config.heavyModelProvider}/${this.config.heavyModelName}\n`)
+    // Config loaded silently — no pipe writes to avoid EPIPE on startup
   }
 
   reload(): void {
