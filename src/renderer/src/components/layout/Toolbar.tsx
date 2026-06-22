@@ -60,7 +60,7 @@ export function Toolbar({ onToggleAI, onToggleChat, onAIEdit, showChat, isEditin
   const hasVideo = assets.filter(a => a.mediaType === 'video').length > 0
 
   return (
-    <div className="flex items-center gap-2 px-4 py-2 bg-gray-850 border-b border-gray-700">
+    <div className="flex items-center gap-2 pl-20 pr-4 py-2 bg-gray-850 border-b border-gray-700 toolbar-drag" style={{ paddingLeft: '80px' }}>
       <div className="flex-1 flex items-center gap-1">
         <Button variant="ghost" size="sm" onClick={handleNewProject}>
           新建项目

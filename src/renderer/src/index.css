@@ -4,3 +4,18 @@
   --color-gray-750: #2d3748;
   --color-gray-850: #1a202c;
 }
+
+/* macOS traffic-light-safe toolbar spacing */
+.toolbar-drag {
+  -webkit-app-region: drag;
+}
+.toolbar-drag button,
+.toolbar-drag input,
+.toolbar-drag select {
+  -webkit-app-region: no-drag;
+}
+
+/* Left padding for macOS traffic lights (~75px) */
+.pl-macos {
+  padding-left: 80px;
+}
