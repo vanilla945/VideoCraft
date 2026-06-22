@@ -66,6 +66,7 @@ export function AppShell(): JSX.Element {
         showChat={showChat}
         isEditing={isEditing}
         hasSubtitles={subtitles.length > 0}
+        showAIPanel={showAIPanel}
       />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
@@ -80,22 +81,27 @@ export function AppShell(): JSX.Element {
             </div>
           )}
 
+          {/* AI Edit Result — modal overlay for visibility */}
           {edlData && (
-            <div className="border-t border-blue-700">
-              <EditPreview
-                edl={edlData}
-                review={reviewData}
-                rounds={editRounds}
-                onApply={handleApplyEdits}
-                onReject={() => { setEdlData(null); setReviewData(null) }}
-                disabled={isEditing}
-              />
+            <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black/60" onClick={() => { setEdlData(null); setReviewData(null) }}>
+              <div className="w-full max-w-2xl max-h-[70vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+                <EditPreview
+                  edl={edlData}
+                  review={reviewData}
+                  rounds={editRounds}
+                  onApply={handleApplyEdits}
+                  onReject={() => { setEdlData(null); setReviewData(null) }}
+                  disabled={isEditing}
+                />
+              </div>
             </div>
           )}
 
           {aiEditApplied && (
-            <div className="flex items-center justify-between px-4 py-2 bg-blue-500/10 border-t border-blue-700/50">
-              <span className="text-sm text-blue-300">✅ AI 剪辑已应用</span>
+            <div className="flex items-center justify-between px-4 py-2 bg-green-500/10 border-t border-green-700/50">
+              <span className="text-sm text-green-300 flex items-center gap-2">
+                ✅ AI 剪辑已应用 — 你可以点击预览窗查看效果，或继续微调
+              </span>
               <button onClick={revertAIEdits} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-gray-300 transition-colors">
                 撤销 AI 剪辑
               </button>

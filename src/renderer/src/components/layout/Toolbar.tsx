@@ -15,9 +15,10 @@ interface ToolbarProps {
   showChat?: boolean
   isEditing?: boolean
   hasSubtitles?: boolean
+  showAIPanel?: boolean
 }
 
-export function Toolbar({ onToggleAI, onToggleChat, onAIEdit, showChat, isEditing, hasSubtitles }: ToolbarProps): JSX.Element {
+export function Toolbar({ onToggleAI, onToggleChat, onAIEdit, showChat, isEditing, hasSubtitles, showAIPanel }: ToolbarProps): JSX.Element {
   const [showProjectDialog, setShowProjectDialog] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const { project, createProject, saveProject, saveProjectAs, loadProject } = useProjectStore()
@@ -32,11 +33,8 @@ export function Toolbar({ onToggleAI, onToggleChat, onAIEdit, showChat, isEditin
 
   const handleOpenProject = async (): Promise<void> => {
     const files = await window.api.dialog.openFile([
-      { name: 'VideoCraft Project', extensions: ['vcraft'] }
-    ])
-    if (files.length > 0) {
-      await loadProject(files[0])
-    }
+      { name: 'VideoCraft Project', extensions: ['vcraft'] }])
+    if (files.length > 0) await loadProject(files[0])
   }
 
   const handleTranscribe = useCallback(async () => {
@@ -45,7 +43,6 @@ export function Toolbar({ onToggleAI, onToggleChat, onAIEdit, showChat, isEditin
     await startTranscription(videoAssets[0].filePath, 'zh')
   }, [assets, startTranscription])
 
-  // Smart AI Edit: auto-transcribe if no subtitles exist yet
   const handleAIEditWithTranscribe = useCallback(async () => {
     if (!hasSubtitles && !isTranscribing) {
       const videoAssets = assets.filter(a => a.mediaType === 'video')
@@ -61,69 +58,100 @@ export function Toolbar({ onToggleAI, onToggleChat, onAIEdit, showChat, isEditin
 
   return (
     <div className="flex items-center gap-2 pl-20 pr-4 py-2 bg-gray-850 border-b border-gray-700 toolbar-drag" style={{ paddingLeft: '80px' }}>
-      <div className="flex-1 flex items-center gap-1">
-        <Button variant="ghost" size="sm" onClick={handleNewProject}>
-          新建项目
-        </Button>
-        <Button variant="ghost" size="sm" onClick={handleOpenProject}>
-          打开项目
-        </Button>
+      {/* Left: project management */}
+      <div className="flex items-center gap-1">
+        <Button variant="ghost" size="sm" onClick={handleNewProject}>新建</Button>
+        <Button variant="ghost" size="sm" onClick={handleOpenProject}>打开</Button>
         {project && (
           <>
-            <Button variant="ghost" size="sm" onClick={saveProject}>
-              保存
-            </Button>
-            <Button variant="ghost" size="sm" onClick={saveProjectAs}>
-              另存为
-            </Button>
+            <Button variant="ghost" size="sm" onClick={saveProject}>保存</Button>
+            <span className="text-gray-600 mx-1">|</span>
           </>
         )}
       </div>
-      <div className="flex items-center gap-1">
+
+      {/* Center: workflow steps */}
+      <div className="flex-1 flex items-center justify-center gap-1.5">
         {project && (
-          <>
-            <Button variant="secondary" size="sm" onClick={importMedia}>
-              + 导入媒体
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
+          <div className="flex items-center gap-2 bg-gray-800/50 rounded-lg px-3 py-1.5">
+            {/* Step 1: Import */}
+            <button onClick={importMedia} className="flex flex-col items-center px-2 py-0.5 rounded hover:bg-gray-700/50 transition-colors group" title="导入视频/音频素材">
+              <span className="text-lg">📁</span>
+              <span className="text-[10px] text-gray-400 group-hover:text-gray-200">导入</span>
+            </button>
+
+            <span className="text-gray-600 text-xs">→</span>
+
+            {/* Step 2: Style */}
+            <button onClick={onToggleAI} className={`flex flex-col items-center px-2 py-0.5 rounded hover:bg-gray-700/50 transition-colors group ${showAIPanel ? 'bg-blue-500/20 ring-1 ring-blue-500/30' : ''}`} title="选择风格预设和剪辑模式">
+              <span className="text-lg">🎨</span>
+              <span className="text-[10px] text-gray-400 group-hover:text-gray-200">风格</span>
+            </button>
+
+            <span className="text-gray-600 text-xs">→</span>
+
+            {/* Step 3: Transcribe */}
+            <button
               onClick={handleTranscribe}
               disabled={isTranscribing || !hasVideo}
+              className={`flex flex-col items-center px-2 py-0.5 rounded transition-colors group ${isTranscribing ? 'bg-blue-500/20' : 'hover:bg-gray-700/50'} disabled:opacity-40`}
+              title="语音转录生成字幕"
             >
-              {isTranscribing ? '转录中...' : '🎙 转录'}
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
+              {isTranscribing
+                ? <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-400 border-t-transparent" />
+                : <span className="text-lg">🎙</span>}
+              <span className="text-[10px] text-gray-400 group-hover:text-gray-200">转录</span>
+            </button>
+
+            <span className="text-gray-600 text-xs">→</span>
+
+            {/* Step 4: AI Edit */}
+            <button
               onClick={handleAIEditWithTranscribe}
               disabled={isEditing || isTranscribing || !hasVideo}
-              title={!hasSubtitles ? '将自动转录后开始 AI 剪辑' : 'AI 自动分析并生成剪辑方案'}
+              className={`flex flex-col items-center px-2 py-0.5 rounded transition-colors group ${isEditing ? 'bg-purple-500/20 ring-1 ring-purple-500/30' : 'hover:bg-gray-700/50'} disabled:opacity-40`}
+              title={!hasSubtitles ? '自动转录后 AI 剪辑' : 'AI 自动分析并生成剪辑方案'}
             >
-              {isEditing ? 'AI 分析中...'
-                : isTranscribing ? '转录中...'
-                : !hasSubtitles ? '🎙 转录+AI 剪辑'
-                : '🤖 AI 剪辑'}
-            </Button>
-            <Button variant="primary" size="sm" onClick={openExport}>
-              导出视频
-            </Button>
-          </>
+              <span className="text-lg">{isEditing ? '⏳' : '🤖'}</span>
+              <span className="text-[10px] text-gray-400 group-hover:text-gray-200">AI剪辑</span>
+            </button>
+
+            <span className="text-gray-600 text-xs">→</span>
+
+            {/* Step 5: Preview — always visible, just select timeline clips */}
+            <button
+              className="flex flex-col items-center px-2 py-0.5 rounded hover:bg-gray-700/50 transition-colors group"
+              title="在预览窗查看视频效果"
+            >
+              <span className="text-lg">👁</span>
+              <span className="text-[10px] text-gray-400 group-hover:text-gray-200">预览</span>
+            </button>
+
+            <span className="text-gray-600 text-xs">→</span>
+
+            {/* Step 6: Export */}
+            <button
+              onClick={openExport}
+              className="flex flex-col items-center px-2 py-0.5 rounded hover:bg-gray-700/50 transition-colors group"
+              title="导出最终视频"
+            >
+              <span className="text-lg">📦</span>
+              <span className="text-[10px] text-gray-400 group-hover:text-gray-200">导出</span>
+            </button>
+          </div>
         )}
-        {project && (
-          <>
-            <Button variant="ghost" size="sm" onClick={onToggleAI} title="AI 创意输入">
-              🎬
-            </Button>
-            <Button variant="ghost" size="sm" onClick={onToggleChat} title="AI 助手">
-              💬 {showChat ? '◀' : ''}
-            </Button>
-          </>
-        )}
-        <Button variant="ghost" size="sm" onClick={() => setShowSettings(true)}>
-          ⚙
-        </Button>
       </div>
+
+      {/* Right: tools */}
+      <div className="flex items-center gap-1">
+        {project && (
+          <Button variant="ghost" size="sm" onClick={onToggleChat} title="AI 对话助手">
+            💬 {showChat ? '' : ''}
+          </Button>
+        )}
+        <Button variant="ghost" size="sm" onClick={() => setShowSettings(true)}>⚙</Button>
+      </div>
+
       {showProjectDialog && (
         <ProjectSettingsDialog
           onClose={() => setShowProjectDialog(false)}
