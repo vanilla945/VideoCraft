@@ -46,12 +46,15 @@ class WhisperService {
 
   private async _loadModel(): Promise<void> {
     try {
-      const { pipeline } = await import('@xenova/transformers')
-      this.model = await pipeline('automatic-speech-recognition', this.modelName)
+      // Try whisper.cpp CLI first (most reliable for desktop)
+      const { execSync } = await import('child_process')
+      execSync('whisper --version', { stdio: 'pipe', timeout: 3000 })
       this.ready = true
-    } catch (err) {
-      this.ready = false
+      return
+    } catch {
+      // whisper.cpp not installed — will use mock mode
     }
+    this.ready = false
   }
 
   async isReady(): Promise<boolean> {
@@ -85,35 +88,40 @@ class WhisperService {
     onProgress?: (progress: number) => void
   ): Promise<SubtitleItem[]> {
     await this.loadModel()
+    onProgress?.(10)
 
-    if (!this.ready) {
-      return this.generateMockSubtitles(audioPath)
+    // Try whisper.cpp CLI if available
+    if (this.ready) {
+      try {
+        const result = await this.transcribeViaWhisperCPP(audioPath, language)
+        if (result.length > 0) {
+          onProgress?.(100)
+          return result
+        }
+      } catch {
+        // Fall through to mock
+      }
     }
 
+    // Fallback: mock subtitles
+    onProgress?.(50)
+    return this.generateMockSubtitles(audioPath)
+  }
+
+  private async transcribeViaWhisperCPP(audioPath: string, language: string): Promise<SubtitleItem[]> {
+    const { execSync } = await import('child_process')
+    const lang = language === 'zh' ? 'zh' : 'en'
+    const model = 'base'
+
     try {
-      onProgress?.(10)
-
-      // Read WAV file to Float32Array for transformers.js
-      const audioData = this.readWavToFloat32(audioPath)
-      onProgress?.(30)
-
-      // Run transcription with raw audio data
-      const result: WhisperResult = await this.model(audioData, {
-        language,
-        task: 'transcribe',
-        return_timestamps: 'word',
-        chunk_length_s: 30,
-        stride_length_s: 5,
-      })
-
-      onProgress?.(80)
-
-      const subtitles = this.segmentsToSubtitles(result.segments)
-      onProgress?.(100)
-
-      return subtitles
-    } catch (err) {
-      return this.generateMockSubtitles(audioPath)
+      const output = execSync(
+        `whisper "${audioPath}" --model ${model} --language ${lang} --output_format json --output_dir /tmp/whisper_tmp --task transcribe`,
+        { timeout: 120000, stdio: 'pipe' }
+      )
+      const result: WhisperResult = JSON.parse(output.toString())
+      return this.segmentsToSubtitles(result.segments || [])
+    } catch {
+      return []
     }
   }
 
