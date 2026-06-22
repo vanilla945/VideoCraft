@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import { Toolbar } from './Toolbar'
 import { Sidebar } from './Sidebar'
 import { PreviewPane } from '../editor/PreviewPane'
+import { TransportControls } from '../editor/TransportControls'
 import { Timeline } from '../editor/Timeline'
 import { SubtitleTrack } from '../editor/SubtitleTrack'
 import { CreativeInputPanel } from '../ai/CreativeInputPanel'
@@ -105,6 +106,7 @@ export function AppShell(): JSX.Element {
         <Sidebar />
         <main className="flex-1 flex flex-col overflow-hidden">
           <PreviewPane />
+          <TransportControls />
           <AnalysisProgress />
           {showAIPanel && project && (
             <div className="border-t border-gray-700"><CreativeInputPanel /></div>
