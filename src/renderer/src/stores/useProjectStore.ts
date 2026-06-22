@@ -29,6 +29,31 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   loadProject: async (filePath) => {
     const project = await window.api.project.load(filePath)
     set({ project, filePath, isDirty: false })
+
+    // Restore media assets
+    if (project.assets?.length > 0) {
+      const { useMediaStore } = await import('./useMediaStore')
+      useMediaStore.getState().addAssets(project.assets.map(a => a.filePath))
+    }
+
+    // Restore editor timeline
+    if (project.timeline) {
+      const { useEditorStore } = await import('./useEditorStore')
+      useEditorStore.setState({ timeline: project.timeline })
+    }
+
+    // Restore subtitles (if saved in project)
+    const proj = project as any
+    if (proj.subtitles?.length > 0) {
+      const { useSubtitleStore } = await import('./useSubtitleStore')
+      useSubtitleStore.setState({ subtitles: proj.subtitles })
+    }
+
+    // Restore AI creative input (if saved)
+    if (proj.creativeInput) {
+      const { useAIStore } = await import('./useAIStore')
+      useAIStore.getState().loadCreativeInput(proj.creativeInput)
+    }
   },
 
   saveProject: async () => {
@@ -43,7 +68,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       if (!targetPath) return
     }
 
-    await window.api.project.save(project, targetPath)
+    // Merge current state into project before saving
+    const merged = await mergeStateIntoProject(project)
+    await window.api.project.save(merged, targetPath)
     set({ filePath: targetPath, isDirty: false })
   },
 
@@ -56,7 +83,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     ])
     if (!targetPath) return
 
-    await window.api.project.save(project, targetPath)
+    const merged = await mergeStateIntoProject(project)
+    await window.api.project.save(merged, targetPath)
     set({ filePath: targetPath, isDirty: false })
   },
 
@@ -77,3 +105,25 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set({ recentProjects })
   }
 }))
+
+// Collect current runtime state from all stores and merge into Project
+async function mergeStateIntoProject(project: Project): Promise<any> {
+  const { useEditorStore } = await import('./useEditorStore')
+  const { useSubtitleStore } = await import('./useSubtitleStore')
+  const { useAIStore } = await import('./useAIStore')
+  const { useMediaStore } = await import('./useMediaStore')
+
+  const editor = useEditorStore.getState()
+  const subtitle = useSubtitleStore.getState()
+  const ai = useAIStore.getState()
+  const media = useMediaStore.getState()
+
+  return {
+    ...project,
+    assets: media.assets,
+    timeline: editor.timeline,
+    subtitles: subtitle.subtitles,
+    creativeInput: ai.getCreativeInput(),
+    savedAt: new Date().toISOString(),
+  }
+}
