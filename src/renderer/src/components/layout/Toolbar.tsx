@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
-import { Button } from '../ui/Button'
 import { useProjectStore } from '../../stores/useProjectStore'
 import { useMediaStore } from '../../stores/useMediaStore'
+import { useEditorStore } from '../../stores/useEditorStore'
 import { useExportStore } from '../../stores/useExportStore'
 import { useSubtitleStore } from '../../stores/useSubtitleStore'
 import { ProjectSettingsDialog } from '../project/ProjectSettings'
@@ -26,6 +26,18 @@ export function Toolbar({ onToggleAI, onToggleChat, onAIEdit, showChat, isEditin
   const { openDialog: openExport } = useExportStore()
   const { assets } = useMediaStore()
   const { startTranscription, isTranscribing } = useSubtitleStore()
+  const { isPlaying, setPlaying, selectClip, timeline } = useEditorStore()
+
+  // Preview: toggle play/pause, select first clip if none selected
+  const handlePreview = useCallback(() => {
+    const allClips = timeline.tracks.flatMap(t => t.clips)
+    if (allClips.length === 0) return
+    const { selectedClipId } = useEditorStore.getState()
+    if (!selectedClipId) {
+      selectClip(allClips[0].id)
+    }
+    setPlaying(!isPlaying)
+  }, [isPlaying, setPlaying, selectClip, timeline])
 
   const handleNewProject = async (): Promise<void> => {
     setShowProjectDialog(true)
@@ -40,14 +52,19 @@ export function Toolbar({ onToggleAI, onToggleChat, onAIEdit, showChat, isEditin
   const handleTranscribe = useCallback(async () => {
     const videoAssets = assets.filter(a => a.mediaType === 'video')
     if (videoAssets.length === 0) return
-    await startTranscription(videoAssets[0].filePath, 'zh')
+    // Transcribe ALL video assets sequentially
+    for (const asset of videoAssets) {
+      await startTranscription(asset.filePath, 'zh')
+    }
   }, [assets, startTranscription])
 
   const handleAIEditWithTranscribe = useCallback(async () => {
     if (!hasSubtitles && !isTranscribing) {
       const videoAssets = assets.filter(a => a.mediaType === 'video')
       if (videoAssets.length > 0) {
-        await startTranscription(videoAssets[0].filePath, 'zh')
+        for (const asset of videoAssets) {
+          await startTranscription(asset.filePath, 'zh')
+        }
         return
       }
     }
@@ -118,13 +135,14 @@ export function Toolbar({ onToggleAI, onToggleChat, onAIEdit, showChat, isEditin
 
             <span className="text-gray-600 text-xs">→</span>
 
-            {/* Step 5: Preview — always visible, just select timeline clips */}
+            {/* Step 5: Preview — play/pause */}
             <button
-              className="flex flex-col items-center px-2 py-0.5 rounded hover:bg-gray-700/50 transition-colors group"
-              title="在预览窗查看视频效果"
+              onClick={handlePreview}
+              className={`flex flex-col items-center px-2 py-0.5 rounded hover:bg-gray-700/50 transition-colors group ${isPlaying ? 'bg-green-500/20 ring-1 ring-green-500/30' : ''}`}
+              title={isPlaying ? '暂停预览' : '播放预览'}
             >
-              <span className="text-lg">👁</span>
-              <span className="text-[10px] text-gray-400 group-hover:text-gray-200">预览</span>
+              <span className="text-lg">{isPlaying ? '⏸' : '▶'}</span>
+              <span className="text-[10px] text-gray-400 group-hover:text-gray-200">{isPlaying ? '暂停' : '预览'}</span>
             </button>
 
             <span className="text-gray-600 text-xs">→</span>

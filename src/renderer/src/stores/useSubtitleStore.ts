@@ -80,7 +80,17 @@ export const useSubtitleStore = create<SubtitleState>((set, get) => ({
     try {
       const result = await window.api.transcription.start(audioPath, language)
       if (result.success) {
-        set({ subtitles: result.subtitles, isTranscribing: false })
+        const newSubtitles = result.subtitles || []
+        // If transcription returned very little (no speech detected),
+        // mark as visual-only for downstream AI processing
+        const isVisualOnly = newSubtitles.length <= 2
+
+        set((state) => ({
+          subtitles: [...state.subtitles, ...newSubtitles],
+          isTranscribing: false,
+          // Store a flag for AI to know this is visual-only
+          transcriptionError: isVisualOnly ? 'visual-only' : null,
+        }))
       } else {
         set({ transcriptionError: result.error || '转录失败', isTranscribing: false })
       }

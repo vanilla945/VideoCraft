@@ -13,6 +13,7 @@ import { AnalysisProgress } from '../ai/AnalysisProgress'
 import { ErrorBoundary } from '../ui/ErrorBoundary'
 import { OnboardingWizard } from '../onboarding/OnboardingWizard'
 import { useProjectStore } from '../../stores/useProjectStore'
+import { useMediaStore } from '../../stores/useMediaStore'
 import { useSubtitleStore } from '../../stores/useSubtitleStore'
 import { useAIStore } from '../../stores/useAIStore'
 import { useEditorStore } from '../../stores/useEditorStore'
@@ -30,11 +31,39 @@ export function AppShell(): JSX.Element {
   const { applyAIEdits, revertAIEdits, aiEditApplied } = useEditorStore()
 
   const handleAIEdit = useCallback(async () => {
-    if (subtitles.length === 0) return
+    const isVisualOnly = useSubtitleStore.getState().transcriptionError === 'visual-only'
+
+    // For visual-only videos (no speech), generate scene-based segments
+    let effectiveSubtitles = subtitles
+    if (isVisualOnly || subtitles.length === 0) {
+      // Try to extract keyframes and generate visual segments via IPC
+      try {
+        const videoAssets = useMediaStore.getState().assets.filter(a => a.mediaType === 'video')
+        if (videoAssets.length === 0) return
+
+        const keyframes = await window.api.media.extractKeyframes(videoAssets[0].filePath, 5)
+        // Generate mock subtitle items for visual segments
+        effectiveSubtitles = keyframes.map((_, i) => ({
+          id: `visual_${i}`,
+          text: `场景 ${i + 1}`,
+          startTime: i * 5,
+          endTime: (i + 1) * 5,
+          confidence: 0.6,
+          isFillerWord: false,
+        }))
+      } catch {
+        // Use minimal fallback
+        effectiveSubtitles = [
+          { id: 'vis_0', text: '视频画面', startTime: 0, endTime: 10, confidence: 0.8, isFillerWord: false },
+        ]
+      }
+    }
+
+    if (effectiveSubtitles.length === 0) return
     setIsEditing(true)
     try {
       const creativeInput = store.getCreativeInput()
-      const result: any = await window.api.ai.runEdit(subtitles, creativeInput)
+      const result: any = await window.api.ai.runEdit(effectiveSubtitles, creativeInput)
       if (result.success && result.edl?.decisions?.length > 0) {
         setEdlData(result.edl)
         setReviewData(result.reviewReport)
