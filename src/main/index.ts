@@ -1,3 +1,13 @@
+// EPIPE guard — must be FIRST, before any module introduces console writes
+const origWrite = process.stdout.write.bind(process.stdout)
+process.stdout.write = ((chunk: any, ...args: any[]) => {
+  try { return origWrite(chunk, ...args) } catch { return true }
+}) as any
+const origErrWrite = process.stderr.write.bind(process.stderr)
+process.stderr.write = ((chunk: any, ...args: any[]) => {
+  try { return origErrWrite(chunk, ...args) } catch { return true }
+}) as any
+
 import 'dotenv/config'
 import { app, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
