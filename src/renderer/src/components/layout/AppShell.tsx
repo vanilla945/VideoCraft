@@ -51,7 +51,13 @@ export function AppShell(): JSX.Element {
     setIsEditing(true)
     try {
       const creativeInput = store.getCreativeInput()
-      const result: any = await window.api.ai.runEdit(effectiveSubtitles, creativeInput)
+      // Collect AI assistant chat history as user hints for editing
+      const chatHistory = store.chatMessages
+        .filter(m => m.role === 'user')
+        .map(m => `用户: ${m.text}`)
+        .join('\n') || undefined
+
+      const result: any = await window.api.ai.runEdit(effectiveSubtitles, creativeInput, chatHistory)
 
       if (result.success) {
         // Check for unified pipeline result (new) vs old orchestrator

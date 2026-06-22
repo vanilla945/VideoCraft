@@ -60,7 +60,7 @@ export interface UnifiedSummary {
 // ============================================================
 // Prompt builder: inject creative input + style preset
 // ============================================================
-function buildSystemPrompt(preset: StylePreset, input: CreativeInput): string {
+function buildSystemPrompt(preset: StylePreset, input: CreativeInput, chatHistory?: string): string {
   return `你是专业视频后期制作 AI。你的任务是一次完成三个工作：① 筛选和增强字幕 ② 撰写解说词 ③ 制定剪辑方案。
 
 你必须严格遵循以下创作约束：
@@ -96,7 +96,9 @@ ${input.customConstraints?.length ? `- 硬性约束:\n${input.customConstraints.
 - 严格按目标时长控制（如果指定了）
 - 优先保留高信息密度和高情绪价值片段
 - 果断舍弃冗余和离题内容
-- 保持叙事连贯性和情感曲线自然`
+- 保持叙事连贯性和情感曲线自然
+
+${chatHistory ? `【AI 助手对话历史——用户的额外指令】\n${chatHistory}\n注意：对话记录中可能包含用户对具体片段的修改要求，请优先执行这些指令。` : ''}`
 }
 
 function buildPrompt(
@@ -177,10 +179,11 @@ class UnifiedPipelineService {
   async process(
     subtitles: SubtitleItem[],
     creativeInput: CreativeInput,
-    videoDuration?: number
+    videoDuration?: number,
+    chatHistory?: string
   ): Promise<UnifiedResult | null> {
     const preset = BUILTIN_PRESETS.find(p => p.id === creativeInput.presetId) || BUILTIN_PRESETS[0]
-    const systemPrompt = buildSystemPrompt(preset, creativeInput)
+    const systemPrompt = buildSystemPrompt(preset, creativeInput, chatHistory)
     const prompt = buildPrompt(subtitles, preset, creativeInput, videoDuration || 60)
 
     try {

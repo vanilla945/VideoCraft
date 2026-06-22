@@ -11,13 +11,13 @@ import { BUILTIN_PRESETS } from '../../shared/types'
 export function registerAIHandlers(): void {
   // ====== Unified Pipeline (primary) ======
   // One LLM call: smart subtitles + narration + edit decisions
-  ipcMain.handle(IPC_CHANNELS.AI_EDIT_RUN, async (_event, subtitles: SubtitleItem[], creativeInput: CreativeInput) => {
+  ipcMain.handle(IPC_CHANNELS.AI_EDIT_RUN, async (_event, subtitles: SubtitleItem[], creativeInput: CreativeInput, chatHistory?: string) => {
     try {
       const videoDuration = subtitles.length > 0
         ? Math.max(...subtitles.map(s => s.endTime))
         : 60
 
-      const result = await unifiedPipelineService.process(subtitles, creativeInput, videoDuration)
+      const result = await unifiedPipelineService.process(subtitles, creativeInput, videoDuration, chatHistory)
 
       if (result) {
         return {

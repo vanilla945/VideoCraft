@@ -65,8 +65,8 @@ const api = {
       ipcRenderer.invoke('transcription:export-srt', subtitles, outputPath)
   },
   ai: {
-    runEdit: (subtitles: unknown, creativeInput: unknown): Promise<unknown> =>
-      ipcRenderer.invoke('ai:edit-run', subtitles, creativeInput),
+    runEdit: (subtitles: unknown, creativeInput: unknown, chatHistory?: string): Promise<unknown> =>
+      ipcRenderer.invoke('ai:edit-run', subtitles, creativeInput, chatHistory),
     chatSend: (projectId: string, message: string, subtitles: unknown, creativeInput: unknown): Promise<unknown> =>
       ipcRenderer.invoke('ai:chat-send', projectId, message, subtitles, creativeInput),
     chatParse: (text: string, subtitles: unknown, creativeInput: unknown): Promise<unknown> =>

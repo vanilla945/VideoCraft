@@ -49,7 +49,7 @@ declare global {
         exportSRT: (subtitles: import('@shared/types/subtitle').SubtitleItem[], outputPath?: string) => Promise<{ success: boolean; path?: string; error?: string }>
       }
       ai: {
-        runEdit: (subtitles: import('@shared/types/subtitle').SubtitleItem[], creativeInput: import('@shared/types/creative-input').CreativeInput) => Promise<{ success: boolean; edl?: any; reviewReport?: any; rounds?: number; timing?: any; error?: string }>
+        runEdit: (subtitles: import('@shared/types/subtitle').SubtitleItem[], creativeInput: import('@shared/types/creative-input').CreativeInput, chatHistory?: string) => Promise<{ success: boolean; edl?: any; reviewReport?: any; rounds?: number; timing?: any; error?: string }>
         chatSend: (projectId: string, message: string, subtitles: import('@shared/types/subtitle').SubtitleItem[], creativeInput: import('@shared/types/creative-input').CreativeInput) => Promise<{ success: boolean; message?: { role: string; content: string; timestamp: number }; error?: string }>
         chatParse: (text: string, subtitles: import('@shared/types/subtitle').SubtitleItem[], creativeInput: import('@shared/types/creative-input').CreativeInput) => Promise<{ success: boolean; command?: any; error?: string }>
       }
