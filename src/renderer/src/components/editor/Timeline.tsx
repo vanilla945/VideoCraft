@@ -146,6 +146,10 @@ export function Timeline(): JSX.Element {
                     asset={asset}
                     isSelected={clip.id === selectedClipId}
                     onSelect={() => selectClip(clip.id)}
+                    onRemove={() => {
+                      const { removeClip } = useEditorStore.getState()
+                      removeClip(clip.id)
+                    }}
                     pxPerSec={pxPerSec}
                   />
                 )

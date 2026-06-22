@@ -54,24 +54,35 @@ export function Toolbar({ onToggleAI, onToggleChat, onAIEdit, showChat, isEditin
     const videoAssets = assets.filter(a => a.mediaType === 'video')
     if (videoAssets.length === 0) return
 
-    // Ensure a video track exists on the timeline
-    ensureDefaultTrack()
-    const tracks = useEditorStore.getState().timeline.tracks
-    const videoTrack = tracks.find(t => t.type === 'video') || tracks[0]
+    // Mark as transcribing
+    useSubtitleStore.getState().setTranscribing(true)
 
-    // Transcribe ALL video assets sequentially
-    for (const asset of videoAssets) {
-      await startTranscription(asset.filePath, 'zh')
+    try {
+      // Ensure a video track exists on the timeline
+      ensureDefaultTrack()
+      const tracks = useEditorStore.getState().timeline.tracks
+      const videoTrack = tracks.find(t => t.type === 'video') || tracks[0]
 
-      // Auto-add clip to timeline so AI editing can operate on time ranges
-      const state = useEditorStore.getState()
-      const alreadyAdded = state.timeline.tracks
-        .flatMap(t => t.clips)
-        .some(c => c.assetId === asset.id)
+      // Transcribe ALL video assets sequentially
+      for (let i = 0; i < videoAssets.length; i++) {
+        const asset = videoAssets[i]
+        // Update progress: e.g. "转录中 (1/3)"
+        useSubtitleStore.getState().setTranscribing(true)
 
-      if (!alreadyAdded && videoTrack) {
-        addClipToTrack(asset.id, videoTrack.id, asset.metadata.duration)
+        await startTranscription(asset.filePath, 'zh')
+
+        // Auto-add clip to timeline
+        const state = useEditorStore.getState()
+        const alreadyAdded = state.timeline.tracks
+          .flatMap(t => t.clips)
+          .some(c => c.assetId === asset.id)
+
+        if (!alreadyAdded && videoTrack) {
+          addClipToTrack(asset.id, videoTrack.id, asset.metadata.duration)
+        }
       }
+    } finally {
+      useSubtitleStore.getState().setTranscribing(false)
     }
   }, [assets, startTranscription, ensureDefaultTrack, addClipToTrack])
 

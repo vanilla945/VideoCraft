@@ -28,7 +28,6 @@ interface SubtitleState {
 
 export const useSubtitleStore = create<SubtitleState>((set, get) => ({
   subtitles: [],
-  isTranscribing: false,
   transcriptionError: null,
   srtContent: null,
   selectedSubtitleId: null,
@@ -76,7 +75,6 @@ export const useSubtitleStore = create<SubtitleState>((set, get) => ({
     }),
 
   startTranscription: async (audioPath, language = 'zh') => {
-    set({ isTranscribing: true, transcriptionError: null })
     try {
       const result = await window.api.transcription.start(audioPath, language)
       if (result.success) {
@@ -87,17 +85,15 @@ export const useSubtitleStore = create<SubtitleState>((set, get) => ({
 
         set((state) => ({
           subtitles: [...state.subtitles, ...newSubtitles],
-          isTranscribing: false,
           // Store a flag for AI to know this is visual-only
           transcriptionError: isVisualOnly ? 'visual-only' : null,
         }))
       } else {
-        set({ transcriptionError: result.error || '转录失败', isTranscribing: false })
+        set({ transcriptionError: result.error || '转录失败',  })
       }
     } catch (err) {
       set({
         transcriptionError: (err as Error).message || '转录异常',
-        isTranscribing: false,
       })
     }
   },
