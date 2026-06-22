@@ -30,16 +30,21 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const project = await window.api.project.load(filePath)
     set({ project, filePath, isDirty: false })
 
-    // Restore media assets
+    // Restore media assets FIRST — must complete before timeline
     if (project.assets?.length > 0) {
       const { useMediaStore } = await import('./useMediaStore')
-      useMediaStore.getState().addAssets(project.assets.map(a => a.filePath))
+      await useMediaStore.getState().addAssets(project.assets.map(a => a.filePath))
     }
 
-    // Restore editor timeline
+    // Now restore editor timeline (clips reference assetIds in media store)
     if (project.timeline) {
       const { useEditorStore } = await import('./useEditorStore')
-      useEditorStore.setState({ timeline: project.timeline })
+      useEditorStore.setState({
+        timeline: project.timeline,
+        selectedClipId: null,
+        playbackPosition: 0,
+        isPlaying: false,
+      })
     }
 
     // Restore subtitles (if saved in project)
