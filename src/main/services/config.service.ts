@@ -94,6 +94,7 @@ class ConfigService {
     return {
       deepseek: process.env.DEEPSEEK_API_KEY ? 'configured' : 'missing',
       minimax: process.env.MINIMAX_API_KEY ? 'configured' : 'missing',
+      minimax_stt: process.env.MINIMAX_STT_API_KEY ? 'configured' : 'missing',
       kimi: process.env.KIMI_API_KEY ? 'configured' : 'missing',
     }
   }

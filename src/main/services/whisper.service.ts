@@ -28,7 +28,7 @@ class WhisperService {
   // ---- public API ----
 
   async isReady(): Promise<boolean> {
-    return await this.checkWhisperCPP() || !!process.env.MINIMAX_API_KEY
+    return await this.checkWhisperCPP() || !!process.env.MINIMAX_STT_API_KEY
   }
 
   async transcribe(
@@ -46,8 +46,8 @@ class WhisperService {
       return subtitles
     }
 
-    // Try Minimax cloud API
-    const apiKey = process.env.MINIMAX_API_KEY
+    // Try Minimax cloud STT (uses separate API key from LLM key)
+    const apiKey = process.env.MINIMAX_STT_API_KEY
     if (apiKey) {
       onProgress?.(15)
       const subtitles = await this.transcribeViaMinimax(audioPath, language, apiKey)
@@ -56,8 +56,7 @@ class WhisperService {
     }
 
     throw new Error(
-      '语音转录失败。未检测到 whisper.cpp 也未配置 MINIMAX_API_KEY。\n' +
-      '请安装 whisper.cpp 或在 .env 中配置 MINIMAX_API_KEY。'
+      '语音转录失败。请安装 whisper.cpp 或在 .env 中配置 MINIMAX_STT_API_KEY。'
     )
   }
 

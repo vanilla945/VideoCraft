@@ -167,6 +167,10 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps): JSX.Elem
               {statusBadge('minimax')}
             </div>
             <div className="flex items-center justify-between py-1 px-2 bg-gray-700/30 rounded">
+              <span className="text-gray-300">Minimax STT (语音转录)</span>
+              {statusBadge('minimax_stt')}
+            </div>
+            <div className="flex items-center justify-between py-1 px-2 bg-gray-700/30 rounded">
               <span className="text-gray-300">Kimi</span>
               {statusBadge('kimi')}
             </div>
