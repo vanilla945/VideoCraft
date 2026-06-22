@@ -10,6 +10,12 @@ import { SubtitleEditorPanel } from '../ai/SubtitleEditorPanel'
 import { EditPreview } from '../ai/EditPreview'
 import { ChatPanel } from '../ai/ChatPanel'
 import { AnalysisProgress } from '../ai/AnalysisProgress'
+function fmtTime(sec: number): string {
+  const m = Math.floor(sec / 60)
+  const s = Math.floor(sec % 60)
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
 import { useProjectStore } from '../../stores/useProjectStore'
 import { useMediaStore } from '../../stores/useMediaStore'
 import { useSubtitleStore } from '../../stores/useSubtitleStore'
@@ -24,6 +30,8 @@ export function AppShell(): JSX.Element {
   const [editRounds, setEditRounds] = useState(0)
   const [isEditing, setIsEditing] = useState(false)
   const [unifiedResult, setUnifiedResult] = useState<any>(null)
+  const [editingNarration, setEditingNarration] = useState<string>('')
+  const [editingNarrIdx, setEditingNarrIdx] = useState(-1)
   const { project } = useProjectStore()
   const { subtitles } = useSubtitleStore()
   const store = useAIStore()
@@ -95,7 +103,22 @@ export function AppShell(): JSX.Element {
     }
   }, [edlData, unifiedResult, applyAIEdits])
 
-  const dismiss = () => { setEdlData(null); setReviewData(null); setUnifiedResult(null) }
+  const dismiss = () => { setEdlData(null); setReviewData(null); setUnifiedResult(null); setEditingNarration(''); setEditingNarrIdx(-1) }
+
+  const handleEditNarration = (idx: number, text: string) => {
+    setEditingNarrIdx(idx)
+    setEditingNarration(text)
+  }
+
+  const saveNarration = () => {
+    if (unifiedResult && editingNarrIdx >= 0) {
+      const updated = { ...unifiedResult, narration: [...unifiedResult.narration] }
+      updated.narration[editingNarrIdx] = { ...updated.narration[editingNarrIdx], text: editingNarration }
+      setUnifiedResult(updated)
+    }
+    setEditingNarrIdx(-1)
+    setEditingNarration('')
+  }
 
   return (
     <div className="h-screen flex flex-col bg-gray-900 text-white overflow-hidden">
@@ -120,40 +143,85 @@ export function AppShell(): JSX.Element {
 
           {/* AI Result Modal */}
           {edlData && (
-            <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 bg-black/60" onClick={dismiss}>
-              <div className="w-full max-w-3xl max-h-[80vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
-                {/* Unified result banner */}
-                {unifiedResult && (
-                  <div className="bg-gradient-to-r from-purple-900/80 to-blue-900/80 rounded-t-lg px-4 py-3 border-b border-purple-500/20">
+            <div className="fixed inset-0 z-50 flex items-start justify-center pt-12 bg-black/60" onClick={dismiss}>
+              <div className="w-full max-w-5xl max-h-[85vh] overflow-hidden shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+                {/* Header */}
+                <div className="bg-gradient-to-r from-purple-900/80 to-blue-900/80 px-4 py-3 shrink-0">
+                  <div className="flex items-center justify-between">
                     <h3 className="text-lg font-bold text-white">
-                      {unifiedResult.summary?.title || 'AI 处理完成'}
+                      {unifiedResult?.summary?.title || 'AI 处理完成'}
                     </h3>
-                    <p className="text-sm text-purple-200 mt-1">{unifiedResult.summary?.reasoning}</p>
-                    {unifiedResult.narration?.length > 0 && (
-                      <div className="mt-2 flex gap-2 text-xs">
-                        <span className="bg-purple-500/20 text-purple-200 px-2 py-0.5 rounded">
-                          📝 {unifiedResult.narration.length} 段解说词
-                        </span>
-                        <span className="bg-green-500/20 text-green-200 px-2 py-0.5 rounded">
-                          ✅ {unifiedResult.smartSubtitles?.filter((s: any) => s.action === 'keep').length || 0} 条字幕保留
-                        </span>
-                        {unifiedResult.smartSubtitles?.filter((s: any) => s.action === 'rewrite').length > 0 && (
-                          <span className="bg-yellow-500/20 text-yellow-200 px-2 py-0.5 rounded">
-                            ✏️ {unifiedResult.smartSubtitles.filter((s: any) => s.action === 'rewrite').length} 条字幕润色
-                          </span>
-                        )}
+                    <span className="text-xs text-purple-200">
+                      {unifiedResult?.narration?.length || 0} 段解说 · {unifiedResult?.smartSubtitles?.filter((s:any) => s.action === 'keep').length || edlData?.summary?.keptClips || 0} 条保留
+                    </span>
+                  </div>
+                  <p className="text-sm text-purple-200/70 mt-1">{unifiedResult?.summary?.reasoning || edlData?.summary?.reasoning}</p>
+                </div>
+
+                {/* Two-column layout */}
+                <div className="flex overflow-hidden flex-1 bg-gray-900">
+                  {/* Left: Clip decisions */}
+                  <div className="w-1/2 border-r border-gray-700 overflow-y-auto">
+                    <div className="px-3 py-2 border-b border-gray-800 text-xs text-gray-400 bg-gray-850">
+                      ✂️ 视频片段处理
+                      <span className="text-gray-500 ml-2">（可继续通过 AI 助手微调）</span>
+                    </div>
+                    <EditPreview
+                      edl={edlData}
+                      review={reviewData}
+                      rounds={editRounds}
+                      onApply={handleApplyEdits}
+                      onReject={dismiss}
+                      disabled={isEditing}
+                    />
+                  </div>
+
+                  {/* Right: Narration editor */}
+                  <div className="w-1/2 overflow-y-auto">
+                    <div className="px-3 py-2 border-b border-gray-800 text-xs text-gray-400 bg-gray-850">
+                      📝 解说词
+                      <span className="text-gray-500 ml-2">（双击文本可编辑，也可通过 AI 助手微调）</span>
+                    </div>
+                    {unifiedResult?.narration?.length > 0 ? (
+                      <div className="p-3 space-y-2">
+                        {unifiedResult.narration.map((narr: any, i: number) => (
+                          <div key={i} className="bg-gray-800/50 rounded-lg p-2.5 border border-gray-700/30">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs text-gray-500">{fmtTime(narr.startTime)} → {fmtTime(narr.endTime)}</span>
+                              <span className="text-xs text-gray-600">{narr.needsImage ? '🖼 含配图' : ''}</span>
+                            </div>
+                            {editingNarrIdx === i ? (
+                              <div>
+                                <textarea
+                                  value={editingNarration}
+                                  onChange={(e) => setEditingNarration(e.target.value)}
+                                  className="w-full bg-gray-700 border border-blue-500 rounded px-2 py-1 text-sm text-white resize-none"
+                                  rows={3}
+                                  autoFocus
+                                />
+                                <div className="flex gap-1 mt-1">
+                                  <button onClick={saveNarration} className="text-xs px-2 py-0.5 bg-blue-600 rounded">保存</button>
+                                  <button onClick={() => setEditingNarrIdx(-1)} className="text-xs px-2 py-0.5 bg-gray-700 rounded text-gray-300">取消</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <p
+                                className="text-sm text-gray-200 cursor-pointer hover:bg-gray-700/30 rounded px-1 -mx-1 transition-colors"
+                                onDoubleClick={() => handleEditNarration(i, narr.text)}
+                              >
+                                {narr.text}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-6 text-center text-gray-500 text-sm">
+                        暂无解说词 — AI 处理后可能会生成解说词
                       </div>
                     )}
                   </div>
-                )}
-                <EditPreview
-                  edl={edlData}
-                  review={reviewData}
-                  rounds={editRounds}
-                  onApply={handleApplyEdits}
-                  onReject={dismiss}
-                  disabled={isEditing}
-                />
+                </div>
               </div>
             </div>
           )}

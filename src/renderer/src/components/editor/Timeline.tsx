@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useEditorStore } from '../../stores/useEditorStore'
 import { useMediaStore } from '../../stores/useMediaStore'
 import { ClipItem } from './ClipItem'
@@ -13,9 +13,11 @@ const ZOOM_LEVELS = [
 ]
 
 export function Timeline(): JSX.Element {
-  const { timeline, selectedClipId, selectClip, addClipToTrack } = useEditorStore()
+  const { timeline, selectedClipId, selectClip, addClipToTrack, playbackPosition, setPlaybackPosition } = useEditorStore()
   const { assets } = useMediaStore()
-  const [zoomIdx, setZoomIdx] = useState(2)  // default to 100% = 80px/s
+  const [zoomIdx, setZoomIdx] = useState(2)
+  const [scrubbing, setScrubbing] = useState(false)
+  const trackRef = useRef<HTMLDivElement>(null)
   const pxPerSec = ZOOM_LEVELS[zoomIdx].value
 
   const videoTrack = timeline.tracks.find((t) => t.type === 'video')
@@ -97,7 +99,42 @@ export function Timeline(): JSX.Element {
           })}
         </div>
         {/* Tracks */}
-        <div className="relative" style={{ minWidth: `${duration * pxPerSec}px`, minHeight: '80px' }}>
+        <div
+          ref={trackRef}
+          className="relative"
+          style={{ minWidth: `${duration * pxPerSec}px`, minHeight: '80px', cursor: scrubbing ? 'ew-resize' : 'pointer' }}
+          onClick={(e) => {
+            if (!trackRef.current || scrubbing) return
+            const rect = trackRef.current.getBoundingClientRect()
+            const x = e.clientX - rect.left + trackRef.current.parentElement!.scrollLeft
+            const time = x / pxPerSec
+            setPlaybackPosition(Math.max(0, Math.min(time, duration)))
+          }}
+          onMouseDown={(e) => {
+            if (!trackRef.current) return
+            const rect = trackRef.current.getBoundingClientRect()
+            const x = e.clientX - rect.left + trackRef.current.parentElement!.scrollLeft
+            setScrubbing(true)
+            setPlaybackPosition(Math.max(0, Math.min(x / pxPerSec, duration)))
+          }}
+          onMouseUp={() => setScrubbing(false)}
+          onMouseLeave={() => setScrubbing(false)}
+          onMouseMove={(e) => {
+            if (!scrubbing || !trackRef.current) return
+            e.preventDefault()
+            const rect = trackRef.current.getBoundingClientRect()
+            const x = e.clientX - rect.left + trackRef.current.parentElement!.scrollLeft
+            setPlaybackPosition(Math.max(0, Math.min(x / pxPerSec, duration)))
+          }}
+        >
+          {/* Playhead line */}
+          <div
+            className="absolute top-0 bottom-0 w-0.5 bg-red-400 z-20 pointer-events-none shadow-[0_0_8px_rgba(248,113,113,0.5)]"
+            style={{ left: `${playbackPosition * pxPerSec}px` }}
+          >
+            <div className="w-3 h-3 bg-red-400 rounded-full -translate-x-1/2 -mt-0.5" />
+          </div>
+
           {timeline.tracks.map((track) => (
             <div key={track.id} className="h-16 relative border-b border-gray-750/50">
               {track.clips.map((clip) => {
