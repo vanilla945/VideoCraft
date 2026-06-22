@@ -158,13 +158,18 @@ class UnifiedPipelineService {
     const systemPrompt = buildSystemPrompt(preset, creativeInput, chatHistory)
     const prompt = buildPrompt(subtitles, preset, creativeInput, duration)
 
+    let llmUsed = false
+
     try {
       const response = await modelRouter.complete('heavy', {
         prompt, systemPrompt, temperature: 0.4, maxTokens: 8000,
       })
       const json = extractJSON(response)
       if (json && (json.editDecisions?.length || json.smartSubtitles?.length)) {
-        return { smartSubtitles: json.smartSubtitles || [], narration: json.narration || [], editDecisions: json.editDecisions || [], summary: json.summary || this.emptySummary(subtitles) }
+        llmUsed = true
+        const result = { smartSubtitles: json.smartSubtitles || [], narration: json.narration || [], editDecisions: json.editDecisions || [], summary: json.summary || this.emptySummary(subtitles) }
+        result.summary.reasoning = (result.summary.reasoning || 'LLM 智能处理') + ' | 来源: 深度理解模型'
+        return result
       }
     } catch { /* fallback below */ }
 
@@ -172,10 +177,15 @@ class UnifiedPipelineService {
     if (creativeInput.targetDuration && creativeInput.targetDuration > 0 && duration > creativeInput.targetDuration * 1.2) {
       const cut = this.timeCut(subtitles, creativeInput.targetDuration)
       // Try generating narration separately (lighter LLM call)
-      const narration = await this.generateNarrationOnly(subtitles.filter(s =>
-        cut.editDecisions.some(d => d.clipId === s.id && d.action === 'keep')
-      ), creativeInput)
-      if (narration.length > 0) cut.narration = narration
+      let narrUsed = false
+      try {
+        const narration = await this.generateNarrationOnly(subtitles.filter(s =>
+          cut.editDecisions.some(d => d.clipId === s.id && d.action === 'keep')
+        ), creativeInput)
+        if (narration.length > 0) { cut.narration = narration; narrUsed = true }
+      } catch { /* no narration */ }
+
+      cut.summary.reasoning = `${cut.summary.reasoning} | 来源: 本地规则引擎${narrUsed ? ' + LLM解说词' : ''}（深度理解模型未返回有效结果，已使用本地算法完成，建议检查 API Key 和网络连接后重试）`
       return cut
     }
     return null

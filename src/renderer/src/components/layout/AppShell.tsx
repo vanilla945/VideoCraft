@@ -105,6 +105,8 @@ export function AppShell(): JSX.Element {
 
   const dismiss = () => { setEdlData(null); setReviewData(null); setUnifiedResult(null); setEditingNarration(''); setEditingNarrIdx(-1) }
 
+  const isLocalFallback = unifiedResult?.summary?.reasoning?.includes('本地规则引擎') || edlData?.summary?.reasoning?.includes('本地规则引擎')
+
   const handleEditNarration = (idx: number, text: string) => {
     setEditingNarrIdx(idx)
     setEditingNarration(text)
@@ -145,6 +147,18 @@ export function AppShell(): JSX.Element {
           {edlData && (
             <div className="fixed inset-0 z-50 flex items-start justify-center pt-12 bg-black/60" onClick={dismiss}>
               <div className="w-full max-w-5xl max-h-[85vh] overflow-hidden shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+                {/* Fallback warning */}
+                {isLocalFallback && (
+                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-t-lg px-4 py-2 flex items-start gap-2">
+                    <span className="text-yellow-400 text-lg flex-shrink-0">⚠️</span>
+                    <div>
+                      <p className="text-sm text-yellow-300 font-medium">深度理解模型未返回有效结果，已切换为本地规则引擎</p>
+                      <p className="text-xs text-yellow-400/70 mt-0.5">
+                        当前方案基于时长裁剪算法{unifiedResult?.narration?.length ? '+本地解说词生成' : ''}。建议检查 API Key 和网络连接后重试 AI 剪辑以获得完整智能字幕、解说词和剪辑方案。
+                      </p>
+                    </div>
+                  </div>
+                )}
                 {/* Header */}
                 <div className="bg-gradient-to-r from-purple-900/80 to-blue-900/80 px-4 py-3 shrink-0">
                   <div className="flex items-center justify-between">
