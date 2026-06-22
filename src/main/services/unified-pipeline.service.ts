@@ -168,11 +168,50 @@ class UnifiedPipelineService {
       }
     } catch { /* fallback below */ }
 
-    // Fallback: time-based cutting
+    // Fallback: time-based cutting + try narration
     if (creativeInput.targetDuration && creativeInput.targetDuration > 0 && duration > creativeInput.targetDuration * 1.2) {
-      return this.timeCut(subtitles, creativeInput.targetDuration)
+      const cut = this.timeCut(subtitles, creativeInput.targetDuration)
+      // Try generating narration separately (lighter LLM call)
+      const narration = await this.generateNarrationOnly(subtitles.filter(s =>
+        cut.editDecisions.some(d => d.clipId === s.id && d.action === 'keep')
+      ), creativeInput)
+      if (narration.length > 0) cut.narration = narration
+      return cut
     }
     return null
+  }
+
+  private async generateNarrationOnly(subtitles: SubtitleItem[], input: CreativeInput): Promise<NarrationSegment[]> {
+    if (subtitles.length === 0) return []
+
+    // Try LLM first
+    const textSample = subtitles.slice(0, 20).map(s => s.text).join('; ')
+    try {
+      const response = await modelRouter.complete('heavy', {
+        prompt: `为以下视频片段撰写解说词。JSON: [{"text":"解说","startTime":0,"endTime":3,"needsImage":false}]\n内容: ${textSample.slice(0, 2000)}`,
+        systemPrompt: '你是解说词 AI。返回 JSON 数组。',
+        temperature: 0.5, maxTokens: 1500,
+      })
+      const json = extractJSON(response)
+      const arr = Array.isArray(json) ? json : json?.narration || []
+      if (arr.length > 0) return arr as NarrationSegment[]
+    } catch { /* use local fallback below */ }
+
+    // Local fallback: wrap kept subtitles as narration segments
+    return subtitles.map((s, i) => {
+      const isFirst = i === 0
+      const isLast = i === subtitles.length - 1
+      let text = s.text || ''
+      if (isFirst) text = `大家好，${text}`
+      if (isLast) text = `${text}。感谢观看！`
+      return {
+        text,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        needsImage: i === 0,
+        imagePrompt: i === 0 ? '视频封面图' : undefined,
+      } as NarrationSegment
+    })
   }
 
   private timeCut(subtitles: SubtitleItem[], target: number): UnifiedResult {
