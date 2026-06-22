@@ -4,22 +4,13 @@ import { app } from 'electron'
 import { randomUUID } from 'crypto'
 import type { SubtitleItem } from '../../shared/types/subtitle'
 
-interface WhisperResult {
-  text: string
-  segments: Array<{
-    id: number
-    start: number
-    end: number
-    text: string
-    confidence?: number
-  }>
-}
+/**
+ * Real transcription pipeline. Priority:
+ * 1. whisper.cpp CLI (local, free)
+ * 2. Minimax STT API (cloud, uses existing API key)
+ */
 
 class WhisperService {
-  private model: any = null
-  private modelName: string = 'Xenova/whisper-base'
-  private ready: boolean = false
-  private loading: Promise<void> | null = null
   private outputDir: string
 
   private fillerPatterns = [
@@ -31,55 +22,13 @@ class WhisperService {
 
   constructor() {
     this.outputDir = path.join(app.getPath('userData'), 'transcription')
-    this.ensureDir(this.outputDir)
+    if (!fs.existsSync(this.outputDir)) fs.mkdirSync(this.outputDir, { recursive: true })
   }
 
-  private ensureDir(dir: string): void {
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  }
-
-  private async loadModel(): Promise<void> {
-    if (this.loading) return this.loading
-    this.loading = this._loadModel()
-    return this.loading
-  }
-
-  private async _loadModel(): Promise<void> {
-    try {
-      // Try whisper.cpp CLI first (most reliable for desktop)
-      const { execSync } = await import('child_process')
-      execSync('whisper --version', { stdio: 'pipe', timeout: 3000 })
-      this.ready = true
-      return
-    } catch {
-      // whisper.cpp not installed — will use mock mode
-    }
-    this.ready = false
-  }
+  // ---- public API ----
 
   async isReady(): Promise<boolean> {
-    await this.loadModel()
-    return this.ready
-  }
-
-  /**
-   * Read a 16kHz mono PCM WAV file and convert to Float32Array.
-   * The IPC handler extracts audio via ffmpeg: -acodec pcm_s16le -ar 16000 -ac 1
-   */
-  private readWavToFloat32(wavPath: string): Float32Array {
-    const buffer = fs.readFileSync(wavPath)
-    // WAV header is 44 bytes for standard PCM
-    // Skip header, read 16-bit PCM samples as little-endian
-    const pcmOffset = 44
-    const numSamples = Math.floor((buffer.length - pcmOffset) / 2)
-    const samples = new Float32Array(numSamples)
-    for (let i = 0; i < numSamples; i++) {
-      const byteOffset = pcmOffset + i * 2
-      // Int16 little-endian → Float32 [-1, 1]
-      let sample = buffer.readInt16LE(byteOffset)
-      samples[i] = sample / 32768
-    }
-    return samples
+    return await this.checkWhisperCPP() || !!process.env.MINIMAX_API_KEY
   }
 
   async transcribe(
@@ -87,90 +36,161 @@ class WhisperService {
     language: string = 'zh',
     onProgress?: (progress: number) => void
   ): Promise<SubtitleItem[]> {
-    await this.loadModel()
-    onProgress?.(10)
+    onProgress?.(5)
 
-    // Try whisper.cpp CLI if available
-    if (this.ready) {
-      try {
-        const result = await this.transcribeViaWhisperCPP(audioPath, language)
-        if (result.length > 0) {
-          onProgress?.(100)
-          return result
-        }
-      } catch {
-        // Fall through to mock
-      }
+    // Try whisper.cpp first (local, free)
+    if (await this.checkWhisperCPP()) {
+      onProgress?.(15)
+      const subtitles = await this.transcribeViaWhisperCPP(audioPath, language)
+      onProgress?.(90)
+      return subtitles
     }
 
-    // Fallback: mock subtitles
-    onProgress?.(50)
-    return this.generateMockSubtitles(audioPath)
+    // Try Minimax cloud API
+    const apiKey = process.env.MINIMAX_API_KEY
+    if (apiKey) {
+      onProgress?.(15)
+      const subtitles = await this.transcribeViaMinimax(audioPath, language, apiKey)
+      onProgress?.(90)
+      return subtitles
+    }
+
+    throw new Error(
+      '语音转录失败。未检测到 whisper.cpp 也未配置 MINIMAX_API_KEY。\n' +
+      '请安装 whisper.cpp 或在 .env 中配置 MINIMAX_API_KEY。'
+    )
   }
+
+  // ---- provider checks ----
+
+  private async checkWhisperCPP(): Promise<boolean> {
+    try {
+      const { execSync } = await import('child_process')
+      execSync('whisper --version 2>/dev/null || whisper-cpp --version 2>/dev/null', { stdio: 'pipe', timeout: 3000 })
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  // ---- whisper.cpp transcription ----
 
   private async transcribeViaWhisperCPP(audioPath: string, language: string): Promise<SubtitleItem[]> {
     const { execSync } = await import('child_process')
     const lang = language === 'zh' ? 'zh' : 'en'
-    const model = 'base'
+    const outDir = path.join(this.outputDir, 'whisper_tmp')
+    if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true })
 
-    try {
-      const output = execSync(
-        `whisper "${audioPath}" --model ${model} --language ${lang} --output_format json --output_dir /tmp/whisper_tmp --task transcribe`,
-        { timeout: 120000, stdio: 'pipe' }
-      )
-      const result: WhisperResult = JSON.parse(output.toString())
-      return this.segmentsToSubtitles(result.segments || [])
-    } catch {
-      return []
+    const cmd = `whisper "${audioPath}" --model base --language ${lang} --output_format srt --output_dir "${outDir}" --task transcribe`
+    execSync(cmd, { timeout: 300000, stdio: 'pipe' })
+
+    const baseName = path.basename(audioPath, path.extname(audioPath))
+    const srtPath = path.join(outDir, `${baseName}.srt`)
+    if (fs.existsSync(srtPath)) {
+      return this.parseSRT(fs.readFileSync(srtPath, 'utf-8'))
     }
+    return []
   }
 
-  private segmentsToSubtitles(segments: WhisperResult['segments']): SubtitleItem[] {
-    return segments.map((seg, idx) => ({
+  // ---- Minimax STT cloud ----
+
+  private async transcribeViaMinimax(audioPath: string, language: string, apiKey: string): Promise<SubtitleItem[]> {
+    const wavBuffer = fs.readFileSync(audioPath)
+    const base64 = wavBuffer.toString('base64')
+
+    const langMap: Record<string, string> = { zh: 'zh', en: 'en', ja: 'ja', ko: 'ko' }
+
+    const response = await fetch('https://api.minimaxi.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'speech-01',
+        file: base64,
+        language: langMap[language] || 'zh',
+        response_format: 'verbose_json',
+      }),
+    })
+
+    if (!response.ok) {
+      const err = await response.text()
+      throw new Error(`Minimax STT 错误 ${response.status}: ${err.slice(0, 200)}`)
+    }
+
+    const data: any = await response.json()
+    const segments = data.segments || data.text ? [{ text: data.text, start: 0, end: 5 }] : []
+
+    return segments.map((seg: any, idx: number) => ({
       id: `sub_${idx}`,
-      text: seg.text.trim(),
-      startTime: seg.start,
-      endTime: seg.end,
-      confidence: seg.confidence ?? 0.8,
-      isFillerWord: this.isFillerWord(seg.text.trim()),
+      text: seg.text?.trim() || '',
+      startTime: seg.start || seg.start_time || Number(seg.startTime) || 0,
+      endTime: seg.end || seg.end_time || Number(seg.endTime) || 0,
+      confidence: seg.confidence || seg.score || 0.8,
+      isFillerWord: this.isFillerWord(seg.text?.trim() || ''),
     }))
   }
 
-  private isFillerWord(text: string): boolean {
-    return this.fillerPatterns.some(p => p.test(text))
+  // ---- SRT parser ----
+
+  private parseSRT(srtContent: string): SubtitleItem[] {
+    const blocks = srtContent.split(/\n\n+/)
+    const items: SubtitleItem[] = []
+    for (const block of blocks) {
+      const lines = block.trim().split('\n')
+      if (lines.length < 3) continue
+      const timeMatch = lines[1].match(
+        /(\d+):(\d+):(\d+)[.,](\d+)\s*-->\s*(\d+):(\d+):(\d+)[.,](\d+)/
+      )
+      if (!timeMatch) continue
+      const startTime =
+        parseInt(timeMatch[1]) * 3600 + parseInt(timeMatch[2]) * 60 +
+        parseInt(timeMatch[3]) + parseInt(timeMatch[4]) / 1000
+      const endTime =
+        parseInt(timeMatch[5]) * 3600 + parseInt(timeMatch[6]) * 60 +
+        parseInt(timeMatch[7]) + parseInt(timeMatch[8]) / 1000
+      const text = lines.slice(2).join(' ').trim()
+      items.push({
+        id: `sub_${items.length}`,
+        text,
+        startTime,
+        endTime,
+        confidence: 0.95,
+        isFillerWord: this.isFillerWord(text),
+      })
+    }
+    return items
   }
 
-  private generateMockSubtitles(_audioPath: string): SubtitleItem[] {
-    return [
-      { id: 'sub_0', text: '欢迎使用 VideoCraft', startTime: 0.0, endTime: 2.5, confidence: 0.9, isFillerWord: false },
-      { id: 'sub_1', text: '这是一个 AI 驱动的视频剪辑工具', startTime: 2.5, endTime: 5.5, confidence: 0.9, isFillerWord: false },
-      { id: 'sub_2', text: '导入视频后点击转录即可生成字幕', startTime: 5.5, endTime: 8.5, confidence: 0.85, isFillerWord: false },
-      { id: 'sub_3', text: '然后可以使用 AI 剪辑自动编辑', startTime: 8.5, endTime: 11.0, confidence: 0.9, isFillerWord: false },
-    ]
+  // ---- helpers ----
+
+  private isFillerWord(text: string): boolean {
+    return this.fillerPatterns.some(p => p.test(text))
   }
 
   generateSRT(subtitles: SubtitleItem[]): string {
     return subtitles
       .filter(s => s.text.trim())
       .map((s, idx) => {
-        const startFormatted = this.formatSRTTime(s.startTime)
-        const endFormatted = this.formatSRTTime(s.endTime)
-        return `${idx + 1}\n${startFormatted} --> ${endFormatted}\n${s.text}\n`
+        const sf = this.srtTime(s.startTime)
+        const ef = this.srtTime(s.endTime)
+        return `${idx + 1}\n${sf} --> ${ef}\n${s.text}\n`
       })
       .join('\n')
   }
 
-  private formatSRTTime(seconds: number): string {
-    const h = Math.floor(seconds / 3600)
-    const m = Math.floor((seconds % 3600) / 60)
-    const s = seconds % 60
-    const ms = Math.floor((seconds % 1) * 1000)
+  private srtTime(sec: number): string {
+    const h = Math.floor(sec / 3600)
+    const m = Math.floor((sec % 3600) / 60)
+    const s = sec % 60
+    const ms = Math.floor((s % 1) * 1000)
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(Math.floor(s)).padStart(2, '0')},${String(ms).padStart(3, '0')}`
   }
 
   async exportSRT(subtitles: SubtitleItem[], outputPath?: string): Promise<string> {
     const srt = this.generateSRT(subtitles)
-    const filePath = outputPath || path.join(this.outputDir, `subtitle_${randomUUID()}.srt`)
+    const filePath = outputPath || path.join(this.outputDir, `sub_${randomUUID()}.srt`)
     fs.writeFileSync(filePath, srt, 'utf-8')
     return filePath
   }

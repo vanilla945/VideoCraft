@@ -23,7 +23,7 @@ export function SubtitleTrack(): JSX.Element {
     return (
       <div className="flex items-center justify-center py-4 text-sm text-blue-400">
         <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-400 border-t-transparent mr-2" />
-        正在转录语音...
+        正在转录语音（调用 Minimax STT / whisper.cpp）...
       </div>
     )
   }
