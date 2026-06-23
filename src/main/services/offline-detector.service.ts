@@ -35,7 +35,7 @@ class OfflineDetectorService {
       try {
         const controller = new AbortController()
         const timeoutId = setTimeout(() => controller.abort(), 5000)
-        await fetch('https://api.minimax.chat/v1', { signal: controller.signal })
+        await fetch('https://api.minimaxi.com/v1', { signal: controller.signal })
         clearTimeout(timeoutId)
         this.setOnline(true)
       } catch {

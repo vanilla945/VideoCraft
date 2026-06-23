@@ -21,7 +21,7 @@ class LLMService {
   private getBaseURL(provider: ModelProvider): string {
     const urls: Record<string, string> = {
       deepseek: 'https://api.deepseek.com/v1',
-      minimax: 'https://api.minimax.chat/v1',
+      minimax: 'https://api.minimaxi.com/v1',
       kimi: 'https://api.moonshot.cn/v1',
       local: 'http://localhost:11434/v1',
     }
@@ -56,13 +56,20 @@ class LLMService {
     }
     messages.push({ role: 'user', content: options.prompt })
 
-    const response = await client.chat.completions.create({
+    const params: any = {
       model,
       messages,
       max_tokens: options.maxTokens ?? 4000,
       temperature: options.temperature ?? 0.7,
       stream: false,
-    })
+    }
+
+    // Minimax M3: separate reasoning from output to get clean JSON
+    if (provider === 'minimax') {
+      params.reasoning_split = true
+    }
+
+    const response = await client.chat.completions.create(params)
 
     return response.choices[0]?.message?.content || ''
   }
