@@ -62,7 +62,9 @@ export const useExportStore = create<ExportState>((set, get) => ({
     if (!project || !config) return
 
     if (!config.outputPath) {
-      const path = await window.api.dialog.saveFile('output.mp4', [
+      const desktopPath = await window.api.app.getPath('desktop')
+      const defaultName = `${desktopPath}/${project.config.name || 'output'}.mp4`
+      const path = await window.api.dialog.saveFile(defaultName, [
         { name: 'MP4 Video', extensions: ['mp4'] }
       ])
       if (!path) return
