@@ -38,47 +38,10 @@ export function AppShell(): JSX.Element {
   const { applyAIEdits, revertAIEdits, aiEditApplied } = useEditorStore()
 
   const handleAIEdit = useCallback(async () => {
-    // Build segments from actual timeline CLIPS, not subtitles
-    // Clips have real assetId and time ranges — AI decisions will map correctly
-    const editor = useEditorStore.getState()
-    const allClips = editor.timeline.tracks.flatMap(t => t.clips)
-    if (allClips.length === 0) {
-      // No clips on timeline yet — use subtitles if available
-      if (subtitles.length === 0) return
-    }
+    // Use subtitles as primary input — they contain transcribed text that LLM can understand
+    if (subtitles.length === 0) return
 
-    // Convert clips to subtitle-like items for the unified pipeline
-    // Use clip IDs so EDL decisions map back correctly
-    const mediaAssets = useMediaStore.getState().assets
-    const clipSegments = allClips.length > 0 ? allClips.map(c => {
-      const a = mediaAssets.find(x => x.id === c.assetId)
-      return {
-        id: c.id,
-        text: a?.fileName || c.id.slice(0, 8),
-        startTime: c.sourceStart,
-        endTime: c.sourceEnd,
-        confidence: 0.9,
-        isFillerWord: false,
-      }
-    }) : subtitles // fallback to subtitles
-
-    // Also include transcription text if available, to help LLM understand content
-    const subText = subtitles.length > 0
-      ? subtitles.map(s => `[${fmtTime(s.startTime)}-${fmtTime(s.endTime)}] ${s.text}`).join('\n')
-      : ''
-
-    // If we have subtitles, inject them as additional context into clip segments
-    const enrichedSegments = subText
-      ? clipSegments.map(s => {
-          // Find matching subtitle text for this time range
-          const matched = subtitles
-            .filter(sub => sub.startTime >= s.startTime && sub.endTime <= s.endTime)
-            .map(sub => sub.text).join(' ')
-          return matched ? { ...s, text: matched } : s
-        })
-      : clipSegments
-
-    if (enrichedSegments.length === 0) return
+    const effectiveSubtitles = subtitles
     setIsEditing(true)
     try {
       const creativeInput = store.getCreativeInput()
