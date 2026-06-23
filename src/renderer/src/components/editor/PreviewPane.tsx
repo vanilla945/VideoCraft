@@ -4,7 +4,9 @@ import { useMediaStore } from '../../stores/useMediaStore'
 
 export function PreviewPane(): JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const [videoSrc, setVideoSrc] = useState<string>('')
   const [videoReady, setVideoReady] = useState(false)
+  const readyRef = useRef(false)
   const { selectedClipId, timeline, playbackPosition, isPlaying, setPlaying, setPlaybackPosition, selectClip } = useEditorStore()
   const { assets } = useMediaStore()
 
@@ -14,10 +16,6 @@ export function PreviewPane(): JSX.Element {
     : allClips[0] || null
   const asset = selectedClip ? assets.find((a) => a.id === selectedClip.assetId) : null
 
-  // Only track asset file changes — not source range changes
-  const assetKey = asset?.filePath || 'none'
-  const prevAssetRef = useRef<string | null>(null)
-
   // Auto-select first clip
   useEffect(() => {
     if (allClips.length > 0 && !selectedClipId) {
@@ -25,52 +23,56 @@ export function PreviewPane(): JSX.Element {
     }
   }, [allClips.length])
 
-  // Set video src ONLY when the actual video file changes
+  // Load video when asset file changes
   useEffect(() => {
+    if (!asset) return
+    const src = `file://${asset.filePath}`
+    if (videoSrc === src) return // already loaded
+
+    setVideoSrc(src)
+    setVideoReady(false)
+    readyRef.current = false
+
     const video = videoRef.current
-    if (!video || !asset) return
+    if (!video) return
+    video.src = src
+    video.load()
+  }, [asset?.filePath])
 
-    if (prevAssetRef.current !== asset.filePath) {
-      prevAssetRef.current = asset.filePath
-      setVideoReady(false)
-      video.src = `file://${asset.filePath}`
-      video.load()
-    }
-  }, [assetKey])
-
-  // When clip changes or metadata loads, seek to correct position
+  // When metadata loaded
   const handleLoaded = useCallback(() => {
+    readyRef.current = true
+    setVideoReady(true)
     if (videoRef.current && selectedClip) {
       videoRef.current.currentTime = selectedClip.sourceStart
-      setVideoReady(true)
     }
   }, [selectedClip])
 
-  // When selected clip changes but same video file, just seek
+  // When clip/seek position changes but same video, just seek
   useEffect(() => {
     const video = videoRef.current
-    if (!video || !selectedClip) return
-    if (videoReady && prevAssetRef.current === asset?.filePath) {
+    if (!video || !selectedClip || !readyRef.current) return
+    if (Math.abs(video.currentTime - selectedClip.sourceStart) > 0.3) {
       video.currentTime = selectedClip.sourceStart
     }
-  }, [selectedClip?.id, selectedClip?.sourceStart, videoReady])
+  }, [selectedClip?.id, selectedClip?.sourceStart])
 
-  // Sync position → video (only paused)
+  // Sync playback position from store → video (only paused)
   useEffect(() => {
     const video = videoRef.current
-    if (!video || isPlaying || !videoReady) return
+    if (!video || isPlaying || !readyRef.current) return
     if (Math.abs(video.currentTime - playbackPosition) > 0.5) {
       video.currentTime = playbackPosition
     }
-  }, [playbackPosition, isPlaying, videoReady])
+  }, [playbackPosition, isPlaying])
 
   // Play/pause
   useEffect(() => {
     const video = videoRef.current
-    if (!video || !videoReady) return
+    if (!video || !readyRef.current) return
     if (isPlaying && video.paused && video.src) video.play().catch(() => {})
     else if (!isPlaying && !video.paused) video.pause()
-  }, [isPlaying, videoReady])
+  }, [isPlaying])
 
   const handleTimeUpdate = useCallback(() => {
     if (videoRef.current && isPlaying) setPlaybackPosition(videoRef.current.currentTime)
@@ -79,8 +81,6 @@ export function PreviewPane(): JSX.Element {
   const handlePlay = useCallback(() => setPlaying(true), [setPlaying])
   const handlePause = useCallback(() => setPlaying(false), [setPlaying])
   const handleClick = useCallback(() => { if (videoRef.current?.src) setPlaying(!isPlaying) }, [isPlaying, setPlaying])
-
-  const showSpinner = allClips.length > 0 && !videoReady
 
   return (
     <div className="flex-1 bg-black flex items-center justify-center overflow-hidden relative" onClick={handleClick}>
@@ -91,8 +91,8 @@ export function PreviewPane(): JSX.Element {
           style={{ display: videoReady ? 'block' : 'none' }} />
       )}
 
-      {/* Loading spinner */}
-      {showSpinner && asset && (
+      {/* Loading */}
+      {asset && !videoReady && (
         <div className="absolute inset-0 flex items-center justify-center text-gray-500 bg-black">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-400 border-t-transparent mx-auto mb-3" />
@@ -108,7 +108,7 @@ export function PreviewPane(): JSX.Element {
         </div>
       )}
 
-      {/* Empty state */}
+      {/* Empty */}
       {allClips.length === 0 && !asset && (
         <div className="text-center text-gray-600">
           <div className="text-4xl mb-3">🎬</div>
