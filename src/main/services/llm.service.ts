@@ -21,7 +21,7 @@ class LLMService {
   private getBaseURL(provider: ModelProvider): string {
     const urls: Record<string, string> = {
       deepseek: 'https://api.deepseek.com/v1',
-      minimax: 'https://api.minimaxi.com/v1',
+      minimax: 'https://api.minimax.chat/v1',
       kimi: 'https://api.moonshot.cn/v1',
       local: 'http://localhost:11434/v1',
     }

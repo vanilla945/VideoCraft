@@ -121,7 +121,7 @@ class ImageGenService {
     width: number,
     height: number
   ): Promise<string | null> {
-    const response = await fetch('https://api.minimaxi.com/v1/image/generation', {
+    const response = await fetch('https://api.minimax.chat/v1/image/generation', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,

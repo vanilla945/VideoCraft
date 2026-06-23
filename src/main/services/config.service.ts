@@ -56,11 +56,11 @@ class ConfigService {
 
     // Auto-switch fast/heavy model providers if selected one has no key
     if (this.config.fastModelProvider === 'deepseek' && !hasDeepSeek) {
-      if (hasMinimax) { this.config.fastModelProvider = 'minimax'; this.config.fastModelName = 'minimax-m3' }
+      if (hasMinimax) { this.config.fastModelProvider = 'minimax'; this.config.fastModelName = 'MiniMax-M3' }
       else if (hasKimi) { this.config.fastModelProvider = 'kimi'; this.config.fastModelName = 'kimi-latest' }
     }
     if (this.config.heavyModelProvider === 'deepseek' && !hasDeepSeek) {
-      if (hasMinimax) { this.config.heavyModelProvider = 'minimax'; this.config.heavyModelName = 'minimax-m3' }
+      if (hasMinimax) { this.config.heavyModelProvider = 'minimax'; this.config.heavyModelName = 'MiniMax-M3' }
       else if (hasKimi) { this.config.heavyModelProvider = 'kimi'; this.config.heavyModelName = 'kimi-latest' }
     }
 

@@ -30,13 +30,13 @@ const PROVIDER_OPTIONS = [
 
 const FAST_MODELS: Record<string, { value: string; label: string }[]> = {
   deepseek: [{ value: 'deepseek-v4-flash', label: 'DeepSeek-V4 Flash' }],
-  minimax: [{ value: 'minimax-m3', label: 'Minimax-M3 (全模态)' }],
+  minimax: [{ value: 'MiniMax-M3', label: 'Minimax-M3 (全模态)' }],
   kimi: [{ value: 'kimi-latest', label: 'Kimi-latest' }],
 }
 
 const HEAVY_MODELS: Record<string, { value: string; label: string }[]> = {
   deepseek: [{ value: 'deepseek-v4-pro', label: 'DeepSeek-V4 Pro' }],
-  minimax: [{ value: 'minimax-m3', label: 'Minimax-M3 (全模态)' }],
+  minimax: [{ value: 'MiniMax-M3', label: 'Minimax-M3 (全模态)' }],
   kimi: [{ value: 'kimi-latest', label: 'Kimi-latest' }],
 }
 

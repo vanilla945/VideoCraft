@@ -70,7 +70,7 @@ class ModelRouter {
       // Fallback to Minimax-M3 if primary fails
       if (route.provider !== 'minimax') {
         console.warn(`[ModelRouter] ${route.provider} 调用失败，切换到 Minimax-M3 备用`, (error as Error).message)
-        return await llmService.complete('minimax', 'minimax-m3', {
+        return await llmService.complete('minimax', 'MiniMax-M3', {
           prompt: options.prompt,
           systemPrompt: options.systemPrompt,
           maxTokens: options.maxTokens,
@@ -98,7 +98,7 @@ class ModelRouter {
     } catch (error) {
       if (route.provider !== 'minimax') {
         console.warn(`[ModelRouter] ${route.provider} 调用失败(streaming)，切换到 Minimax-M3`)
-        return await llmService.completeStream('minimax', 'minimax-m3', {
+        return await llmService.completeStream('minimax', 'MiniMax-M3', {
           prompt: options.prompt,
           systemPrompt: options.systemPrompt,
           maxTokens: options.maxTokens,
@@ -127,7 +127,7 @@ class ModelRouter {
     } catch (error) {
       if (route.provider !== 'minimax') {
         console.warn(`[ModelRouter] VLM 调用失败，切换到 Minimax-M3`)
-        return await llmService.visionComplete('minimax', 'minimax-m3', {
+        return await llmService.visionComplete('minimax', 'MiniMax-M3', {
           imageBase64,
           prompt,
           maxTokens,
