@@ -5,7 +5,9 @@ import { useMediaStore } from '../../stores/useMediaStore'
 import { useEditorStore } from '../../stores/useEditorStore'
 import { useExportStore } from '../../stores/useExportStore'
 import { useSubtitleStore } from '../../stores/useSubtitleStore'
+import { useAIStore } from '../../stores/useAIStore'
 import { ProjectSettingsDialog } from '../project/ProjectSettings'
+import { SaveConfirmDialog } from '../project/SaveConfirmDialog'
 import { ExportDialog } from '../export/ExportDialog'
 import { SettingsDialog } from '../settings/SettingsDialog'
 
@@ -21,13 +23,30 @@ interface ToolbarProps {
 
 export function Toolbar({ onToggleAI, onToggleChat, onAIEdit, showChat, isEditing, hasSubtitles, showAIPanel }: ToolbarProps): JSX.Element {
   const [showProjectDialog, setShowProjectDialog] = useState(false)
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
-  const { project, createProject, saveProject, saveProjectAs, loadProject } = useProjectStore()
+  const { project, createProject, saveProject, saveProjectAs, loadProject, isDirty } = useProjectStore()
   const { importMedia } = useMediaStore()
   const { openDialog: openExport } = useExportStore()
   const { assets } = useMediaStore()
   const { startTranscription, isTranscribing } = useSubtitleStore()
   const { isPlaying, setPlaying, selectClip, timeline, addClipToTrack, ensureDefaultTrack } = useEditorStore()
+
+  // Clear all stores for a fresh project
+  const clearAllStores = useCallback(() => {
+    useEditorStore.setState({
+      timeline: { tracks: [], duration: 0 },
+      selectedClipId: null,
+      playbackPosition: 0,
+      isPlaying: false,
+      aiEditApplied: false,
+      lastAIEditRecord: null,
+    })
+    useSubtitleStore.getState().clearSubtitles()
+    useAIStore.getState().resetToDefault()
+    useMediaStore.setState({ assets: [], importing: false })
+    useExportStore.getState().cleanup()
+  }, [])
 
   // Preview: toggle play/pause, select first clip if none selected
   const handlePreview = useCallback(() => {
@@ -41,6 +60,28 @@ export function Toolbar({ onToggleAI, onToggleChat, onAIEdit, showChat, isEditin
   }, [isPlaying, setPlaying, selectClip, timeline])
 
   const handleNewProject = async (): Promise<void> => {
+    // If there's an existing project with unsaved changes, prompt first
+    if (project && isDirty) {
+      setShowSaveConfirm(true)
+      return
+    }
+    // If there's an existing project but no changes, just clear and show dialog
+    if (project) {
+      clearAllStores()
+    }
+    setShowProjectDialog(true)
+  }
+
+  const handleSaveAndNew = async (): Promise<void> => {
+    setShowSaveConfirm(false)
+    await saveProject()
+    clearAllStores()
+    setShowProjectDialog(true)
+  }
+
+  const handleDiscardAndNew = (): void => {
+    setShowSaveConfirm(false)
+    clearAllStores()
     setShowProjectDialog(true)
   }
 
@@ -210,10 +251,19 @@ export function Toolbar({ onToggleAI, onToggleChat, onAIEdit, showChat, isEditin
         <Button variant="ghost" size="sm" onClick={() => setShowSettings(true)}>⚙</Button>
       </div>
 
+      {showSaveConfirm && (
+        <SaveConfirmDialog
+          onSave={handleSaveAndNew}
+          onDiscard={handleDiscardAndNew}
+          onCancel={() => setShowSaveConfirm(false)}
+        />
+      )}
+
       {showProjectDialog && (
         <ProjectSettingsDialog
           onClose={() => setShowProjectDialog(false)}
           onCreate={async (config) => {
+            clearAllStores()
             await createProject(config)
             setShowProjectDialog(false)
           }}
