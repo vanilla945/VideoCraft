@@ -153,6 +153,10 @@ class UnifiedPipelineService {
     videoDuration?: number,
     chatHistory?: string
   ): Promise<UnifiedResult | null> {
+    if (!subtitles || subtitles.length === 0) {
+      return { smartSubtitles: [], narration: [], editDecisions: [], summary: { totalSegments: 0, keptSegments: 0, removedSegments: 0, rewrittenSegments: 0, estimatedDuration: 0, reasoning: '无有效字幕数据' } }
+    }
+
     const preset = BUILTIN_PRESETS.find(p => p.id === creativeInput.presetId) || BUILTIN_PRESETS[0]
     const duration = videoDuration || 60
     const systemPrompt = buildSystemPrompt(preset, creativeInput, chatHistory)
@@ -195,7 +199,7 @@ class UnifiedPipelineService {
   }
 
   private async generateNarrationOnly(subtitles: SubtitleItem[], input: CreativeInput): Promise<NarrationSegment[]> {
-    if (subtitles.length === 0) return []
+    if (!subtitles || subtitles.length === 0) return []
 
     // Try LLM first
     const textSample = subtitles.slice(0, 20).map(s => s.text).join('; ')
@@ -228,6 +232,9 @@ class UnifiedPipelineService {
   }
 
   private timeCut(subtitles: SubtitleItem[], target: number): UnifiedResult {
+    if (!subtitles || subtitles.length === 0) {
+      return { smartSubtitles: [], narration: [], editDecisions: [], summary: { totalSegments: 0, keptSegments: 0, removedSegments: 0, rewrittenSegments: 0, estimatedDuration: 0, reasoning: '无字幕数据' } }
+    }
     const sorted = [...subtitles].sort((a, b) => a.startTime - b.startTime)
     const decisions: UnifiedEditDecision[] = []
     const smart: SmartSubtitle[] = []
