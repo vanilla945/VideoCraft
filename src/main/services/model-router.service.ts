@@ -14,6 +14,7 @@ interface LLMCallOptions {
   systemPrompt?: string
   maxTokens?: number
   temperature?: number
+  jsonMode?: boolean
 }
 
 class ModelRouter {
@@ -65,6 +66,7 @@ class ModelRouter {
         systemPrompt: options.systemPrompt,
         maxTokens: options.maxTokens,
         temperature: options.temperature,
+        jsonMode: options.jsonMode,
       })
     } catch (error) {
       // Fallback to Minimax-M3 if primary fails
@@ -75,6 +77,7 @@ class ModelRouter {
           systemPrompt: options.systemPrompt,
           maxTokens: options.maxTokens,
           temperature: options.temperature,
+          jsonMode: options.jsonMode,
         })
       }
       throw error

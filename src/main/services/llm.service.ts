@@ -7,6 +7,7 @@ interface CompletionOptions {
   maxTokens?: number
   temperature?: number
   stream?: boolean
+  jsonMode?: boolean          // enable JSON mode for supported providers
 }
 
 interface VisionOptions {
@@ -64,9 +65,19 @@ class LLMService {
       stream: false,
     }
 
-    // Minimax M3: separate reasoning from output to get clean JSON
+    // Minimax M3: separate reasoning from output
     if (provider === 'minimax') {
       params.reasoning_split = true
+    }
+
+    // DeepSeek V4: disable thinking for clean JSON output
+    if (provider === 'deepseek') {
+      params.thinking = { type: 'disabled' }
+    }
+
+    // JSON mode for structured output
+    if (options.jsonMode) {
+      params.response_format = { type: 'json_object' }
     }
 
     const response = await client.chat.completions.create(params)

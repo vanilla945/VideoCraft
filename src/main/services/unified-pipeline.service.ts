@@ -162,7 +162,7 @@ class UnifiedPipelineService {
 
     try {
       const response = await modelRouter.complete('heavy', {
-        prompt, systemPrompt, temperature: 0.4, maxTokens: 8000,
+        prompt, systemPrompt, temperature: 0.4, maxTokens: 8000, jsonMode: true,
       })
       const json = extractJSON(response)
       if (json && (json.editDecisions?.length || json.smartSubtitles?.length)) {
@@ -203,7 +203,7 @@ class UnifiedPipelineService {
       const response = await modelRouter.complete('heavy', {
         prompt: `为以下视频片段撰写解说词。JSON: [{"text":"解说","startTime":0,"endTime":3,"needsImage":false}]\n内容: ${textSample.slice(0, 2000)}`,
         systemPrompt: '你是解说词 AI。返回 JSON 数组。',
-        temperature: 0.5, maxTokens: 1500,
+        temperature: 0.5, maxTokens: 1500, jsonMode: true,
       })
       const json = extractJSON(response)
       const arr = Array.isArray(json) ? json : json?.narration || []
