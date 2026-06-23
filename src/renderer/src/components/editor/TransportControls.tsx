@@ -1,16 +1,20 @@
 import { useEditorStore } from '../../stores/useEditorStore'
 
 export function TransportControls(): JSX.Element {
-  const { isPlaying, setPlaying, playbackPosition, setPlaybackPosition } = useEditorStore()
+  const { isPlaying, setPlaying, playbackPosition, setPlaybackPosition, timeline, selectedClipId } = useEditorStore()
+
+  // Get current clip's source range for scrubber bounds
+  const allClips = timeline.tracks.flatMap((t) => t.clips)
+  const currentClip = selectedClipId
+    ? allClips.find((c) => c.id === selectedClipId)
+    : allClips[0]
+  const scrubMin = currentClip?.sourceStart ?? 0
+  const scrubMax = currentClip?.sourceEnd ?? (currentClip?.sourceStart || 0) + (currentClip?.duration || 30)
 
   const seek = (delta: number) => {
-    const currentTime = playbackPosition
-    const newTime = Math.max(0, currentTime + delta)
-    // Find all video elements on the page and seek them
+    const newTime = Math.max(0, playbackPosition + delta)
     const videos = document.querySelectorAll('video')
-    for (const video of videos) {
-      video.currentTime = newTime
-    }
+    for (const v of videos) v.currentTime = newTime
     setPlaybackPosition(newTime)
   }
 
@@ -33,12 +37,12 @@ export function TransportControls(): JSX.Element {
         {isPlaying ? '⏸' : '▶'}
       </button>
       <button onClick={skipForward} className="w-7 h-7 flex items-center justify-center rounded hover:bg-gray-700 text-gray-400 text-sm" title="前进5秒">+5s</button>
-      {/* Draggable scrubber */}
+      {/* Draggable scrubber — range matches current clip */}
       <div className="flex-1 mx-2 relative">
         <input
           type="range"
-          min={0}
-          max={Math.max(playbackPosition + 10, 60)}
+          min={scrubMin}
+          max={scrubMax}
           step={0.1}
           value={playbackPosition}
           onChange={(e) => {

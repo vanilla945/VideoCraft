@@ -158,10 +158,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const firstTrack = state.timeline.tracks[0]
     if (!firstTrack) return
 
-    const firstClip = firstTrack.clips[0]
-    if (!firstClip) return
-
-    const assetId = firstClip.assetId
+    // Build a map: clipId → assetId & source range
+    const clipInfo = new Map<string, { assetId: string; sourceStart: number; sourceEnd: number }>()
+    for (const c of firstTrack.clips) {
+      clipInfo.set(c.id, { assetId: c.assetId, sourceStart: c.sourceStart, sourceEnd: c.sourceEnd })
+    }
 
     // Save full timeline state for revert
     const record: AIEditRecord = {
@@ -182,27 +183,34 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     let timelinePos = 0
 
     for (const d of keepDecisions) {
-      const duration = d.endTime - d.startTime
-      const speedRatio = d.speedRatio || 1
-      const actualDuration = duration / speedRatio
+      // Try to match by clipId first, then by time range
+      const existing = d.clipId ? clipInfo.get(d.clipId) : undefined
+      const assetId = existing?.assetId
+        || firstTrack.clips.find(c =>
+            d.startTime >= c.sourceStart && d.startTime < c.sourceEnd)?.assetId
+        || firstTrack.clips[0].assetId
 
-      const newClip: Clip = {
+      const sourceStart = existing?.sourceStart ?? d.startTime
+      const sourceEnd = existing?.sourceEnd ?? d.endTime
+      const dur = d.endTime - d.startTime
+      const speedRatio = d.speedRatio || 1
+
+      newClips.push({
         id: crypto.randomUUID(),
         assetId,
         trackId: firstTrack.id,
         sourceStart: d.startTime,
         sourceEnd: d.endTime,
         timelineStart: timelinePos,
-        duration: actualDuration,
-      }
-      newClips.push(newClip)
+        duration: dur / speedRatio,
+      })
       record.addedClipIds.push(newClip.id)
 
       if (speedRatio !== 1) {
-        record.modifiedClips.set(newClip.id, { duration: actualDuration, sourceEnd: d.endTime })
+        record.modifiedClips.set(newClip.id, { duration: dur / speedRatio, sourceEnd: d.endTime })
       }
 
-      timelinePos += actualDuration
+      timelinePos += dur / speedRatio
     }
 
     set({

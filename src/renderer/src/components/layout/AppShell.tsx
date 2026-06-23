@@ -38,28 +38,50 @@ export function AppShell(): JSX.Element {
   const { applyAIEdits, revertAIEdits, aiEditApplied } = useEditorStore()
 
   const handleAIEdit = useCallback(async () => {
-    const isVisualOnly = useSubtitleStore.getState().transcriptionError === 'visual-only'
-
-    let effectiveSubtitles = subtitles
-    if (isVisualOnly || subtitles.length === 0) {
-      try {
-        const videoAssets = useMediaStore.getState().assets.filter(a => a.mediaType === 'video')
-        if (videoAssets.length === 0) return
-        const keyframes = await window.api.media.extractKeyframes(videoAssets[0].filePath, 5)
-        effectiveSubtitles = keyframes.map((_, i) => ({
-          id: `visual_${i}`, text: `场景 ${i + 1}`, startTime: i * 5, endTime: (i + 1) * 5,
-          confidence: 0.6, isFillerWord: false,
-        }))
-      } catch {
-        effectiveSubtitles = [{ id: 'vis_0', text: '视频画面', startTime: 0, endTime: 10, confidence: 0.8, isFillerWord: false }]
-      }
+    // Build segments from actual timeline CLIPS, not subtitles
+    // Clips have real assetId and time ranges — AI decisions will map correctly
+    const editor = useEditorStore.getState()
+    const allClips = editor.timeline.tracks.flatMap(t => t.clips)
+    if (allClips.length === 0) {
+      // No clips on timeline yet — use subtitles if available
+      if (subtitles.length === 0) return
     }
 
-    if (effectiveSubtitles.length === 0) return
+    // Convert clips to subtitle-like items for the unified pipeline
+    // Use clip IDs so EDL decisions map back correctly
+    const mediaAssets = useMediaStore.getState().assets
+    const clipSegments = allClips.length > 0 ? allClips.map(c => {
+      const a = mediaAssets.find(x => x.id === c.assetId)
+      return {
+        id: c.id,
+        text: a?.fileName || c.id.slice(0, 8),
+        startTime: c.sourceStart,
+        endTime: c.sourceEnd,
+        confidence: 0.9,
+        isFillerWord: false,
+      }
+    }) : subtitles // fallback to subtitles
+
+    // Also include transcription text if available, to help LLM understand content
+    const subText = subtitles.length > 0
+      ? subtitles.map(s => `[${fmtTime(s.startTime)}-${fmtTime(s.endTime)}] ${s.text}`).join('\n')
+      : ''
+
+    // If we have subtitles, inject them as additional context into clip segments
+    const enrichedSegments = subText
+      ? clipSegments.map(s => {
+          // Find matching subtitle text for this time range
+          const matched = subtitles
+            .filter(sub => sub.startTime >= s.startTime && sub.endTime <= s.endTime)
+            .map(sub => sub.text).join(' ')
+          return matched ? { ...s, text: matched } : s
+        })
+      : clipSegments
+
+    if (enrichedSegments.length === 0) return
     setIsEditing(true)
     try {
       const creativeInput = store.getCreativeInput()
-      // Collect AI assistant chat history as user hints for editing
       const chatHistory = store.chatMessages
         .filter(m => m.role === 'user')
         .map(m => `用户: ${m.text}`)
